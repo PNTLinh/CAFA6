@@ -1,6 +1,7 @@
 import gzip
 import json
-with gzip.open("/mnt/workspace/replicate/Struct2GO/raw_data/goa_human.gaf.gz", "rt") as f:
+go_annotations = {}
+with gzip.open("D:/CAFA6/goa_human.gaf.gz", "rt") as f:
     for line in f:
         if line.startswith("!"):
             continue  # 跳过注释行
@@ -11,5 +12,5 @@ with gzip.open("/mnt/workspace/replicate/Struct2GO/raw_data/goa_human.gaf.gz", "
             go_annotations[protein_id] = []
         go_annotations[protein_id].append(go_id)
 
-with open("/mnt/workspace/replicate/Struct2GO/processed_data/HUMAN_protein_info.json", "w") as f:
+with open("D:/CAFA6/proceed_data/HUMAN_protein_info.json", "w") as f:
     json.dump(go_annotations, f, indent=4)

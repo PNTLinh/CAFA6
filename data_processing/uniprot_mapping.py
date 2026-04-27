@@ -1,7 +1,7 @@
 """
 UniProt ID Mapping Script
 --------------------------
-Input : 9606.protein.links.v12.0.txt.gz  (STRING database)
+Input : 9606.protein.links.v12.0.txt  (STRING database)
 Output: uniprot_ensembl_mapping.csv
 Columns: UniProtKB_AC, Ensembl_Protein
 
@@ -12,128 +12,199 @@ Workflow:
   3. Poll until the job finishes, then download + save as CSV.
 """
 
-import gzip
 import csv
 import time
-import json
-import requests
 from pathlib import Path
 
+import requests
+
 # ── Configuration ──────────────────────────────────────────────────────────────
-INPUT_FILE  = Path(r"D:\CAFA6\9606.protein.links.v12.0.txt.gz")
-OUTPUT_FILE = Path(r"D:\CAFA6\uniprot_ensembl_mapping.csv")
+INPUT_FILE = Path(r"D:\raw_data\ppi.txt")
+OUTPUT_FILE = Path(r"D:\CAFA6\proceed_data\uniprot_ensembl_mapping.csv")
 
-UNIPROT_API  = "https://rest.uniprot.org"
-BATCH_SIZE   = 500      # UniProt recommends ≤ 500 IDs per batch
-POLL_SECONDS = 5        # seconds between status checks
-MAX_RETRIES  = 60       # give up after MAX_RETRIES * POLL_SECONDS seconds
+UNIPROT_API = "https://rest.uniprot.org"
+BATCH_SIZE = 500       # UniProt recommends <= 500 IDs per batch
+POLL_SECONDS = 5       # seconds between status checks
+MAX_RETRIES = 60       # give up after MAX_RETRIES * POLL_SECONDS seconds
+REQUEST_TIMEOUT = 60
+MAX_HTTP_RETRIES = 3
 
-# ── Step 1: Extract unique ENSP IDs ────────────────────────────────────────────
-print("Step 1 – Reading STRING file and extracting unique ENSP IDs …")
+def request_with_retry(method: str, url: str, **kwargs) -> requests.Response:
+    """Send an HTTP request with simple retry for transient network/server errors."""
+    last_err: Exception | None = None
+    for attempt in range(1, MAX_HTTP_RETRIES + 1):
+        try:
+            resp = requests.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
+            if resp.status_code in {429, 500, 502, 503, 504} and attempt < MAX_HTTP_RETRIES:
+                time.sleep(attempt * 2)
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as exc:
+            last_err = exc
+            if attempt == MAX_HTTP_RETRIES:
+                break
+            time.sleep(attempt * 2)
+    raise RuntimeError(f"HTTP request failed after retries: {method} {url}") from last_err
 
-ensp_ids: set[str] = set()
-with gzip.open(INPUT_FILE, "rt") as fh:
-    next(fh)                               # skip header
-    for line in fh:
-        p1, p2, _ = line.rstrip().split()
-        # Strip taxonomy prefix: "9606.ENSP…" → "ENSP…"
-        ensp_ids.add(p1.split(".", 1)[1])
-        ensp_ids.add(p2.split(".", 1)[1])
 
-ensp_list = sorted(ensp_ids)
-print(f"  Found {len(ensp_list):,} unique Ensembl Protein IDs.")
+def parse_ensp(token: str) -> str | None:
+    """Parse STRING token like '9606.ENSP...' into ENSP id; return None on invalid format."""
+    if "." not in token:
+        return None
+    _, ensp = token.split(".", 1)
+    if not ensp.startswith("ENSP"):
+        return None
+    return ensp
 
 
-# ── Helper functions ────────────────────────────────────────────────────────────
+def extract_unique_ensp_ids(input_file: Path) -> list[str]:
+    print("Step 1 - Reading STRING file and extracting unique ENSP IDs ...")
+    ensp_ids: set[str] = set()
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+
+    with input_file.open("rt", encoding="utf-8") as fh:
+        next(fh, None)  # skip header if present
+        for line in fh:
+            parts = line.rstrip().split()
+            if len(parts) < 2:
+                continue
+            ensp1 = parse_ensp(parts[0])
+            ensp2 = parse_ensp(parts[1])
+            if ensp1:
+                ensp_ids.add(ensp1)
+            if ensp2:
+                ensp_ids.add(ensp2)
+    ensp_list = sorted(ensp_ids)
+    print(f"  Found {len(ensp_list):,} unique Ensembl Protein IDs.")
+    return ensp_list
+
+
 def submit_batch(ids: list[str]) -> str:
     """Submit a mapping job and return the job ID."""
-    response = requests.post(
+    response = request_with_retry(
+        "POST",
         f"{UNIPROT_API}/idmapping/run",
         data={
-            "ids":  ",".join(ids),
+            "ids": ",".join(ids),
             "from": "Ensembl_Protein",
-            "to":   "UniProtKB",
+            "to": "UniProtKB",
         },
-        timeout=60,
     )
-    response.raise_for_status()
-    return response.json()["jobId"]
+    payload = response.json()
+    job_id = payload.get("jobId")
+    if not job_id:
+        raise RuntimeError(f"No jobId returned by UniProt API: {payload}")
+    return job_id
 
 
 def wait_for_job(job_id: str) -> None:
-    """Poll until the job is FINISHED (or raise on failure)."""
+    """Poll until the job is FINISHED (or raise on failure/timeout)."""
     url = f"{UNIPROT_API}/idmapping/status/{job_id}"
-    for attempt in range(MAX_RETRIES):
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        data = r.json()
-        status = data.get("jobStatus", "")
-        if status == "FINISHED":
-            return
+    for _ in range(MAX_RETRIES):
+        response = request_with_retry("GET", url)
+        data = response.json()
+        status = data.get("jobStatus")
+
         if status == "FAILED":
             raise RuntimeError(f"Job {job_id} FAILED: {data}")
-        # Still running – wait
+
+        # UniProt may omit 'jobStatus' when job is complete and include results counters.
+        if status == "FINISHED" or (status is None and (data.get("results") or data.get("failedIds") is not None)):
+            return
+
         time.sleep(POLL_SECONDS)
-    raise TimeoutError(f"Job {job_id} did not finish within the timeout period.")
+
+    raise TimeoutError(f"Job {job_id} did not finish within timeout.")
 
 
-def fetch_results(job_id: str) -> list[dict]:
+def parse_next_link(link_header: str) -> str | None:
+    if not link_header:
+        return None
+    for part in link_header.split(","):
+        part = part.strip()
+        if 'rel="next"' in part and "<" in part and ">" in part:
+            return part[part.index("<") + 1: part.index(">")]
+    return None
+
+
+def fetch_results(job_id: str) -> list[dict[str, str]]:
     """Download all result pages for a finished job."""
-    results = []
-    url = f"{UNIPROT_API}/idmapping/uniprotkb/results/{job_id}?format=tsv&fields=accession&size=500"
+    results: list[dict[str, str]] = []
+    url = (
+        f"{UNIPROT_API}/idmapping/uniprotkb/results/{job_id}"
+        "?format=tsv&fields=accession&size=500"
+    )
+
     while url:
-        r = requests.get(url, timeout=60)
-        r.raise_for_status()
+        response = request_with_retry("GET", url)
+        lines = response.text.strip().splitlines()
 
-        # TSV body
-        lines = r.text.strip().splitlines()
         if lines:
-            header = lines[0].split("\t")    # e.g. ["From", "Entry"]
-            for line in lines[1:]:
-                parts = line.split("\t")
-                if len(parts) >= 2:
-                    results.append({
-                        "Ensembl_Protein": parts[0],   # original ENSP ID
-                        "UniProtKB_AC":    parts[1],   # UniProt accession
-                    })
+            for row in lines[1:]:
+                parts = row.split("\t")
+                if len(parts) >= 2 and parts[0] and parts[1]:
+                    results.append(
+                        {
+                            "UniProtKB_AC": parts[1],
+                            "Ensembl_Protein": parts[0],
+                        }
+                    )
 
-        # Pagination: follow "Link: <…>; rel="next"" header
-        link_header = r.headers.get("Link", "")
-        url = None
-        if 'rel="next"' in link_header:
-            # Extract the URL between < >
-            start = link_header.index("<") + 1
-            end   = link_header.index(">")
-            url   = link_header[start:end]
+        url = parse_next_link(response.headers.get("Link", ""))
 
     return results
 
 
-# ── Step 2: Submit batches & collect results ────────────────────────────────────
-print("\nStep 2 – Submitting ID mapping jobs to UniProt …")
-
-all_results: list[dict] = []
-total_batches = (len(ensp_list) + BATCH_SIZE - 1) // BATCH_SIZE
-
-for batch_num in range(total_batches):
-    batch = ensp_list[batch_num * BATCH_SIZE : (batch_num + 1) * BATCH_SIZE]
-    print(f"  Batch {batch_num + 1}/{total_batches}  ({len(batch)} IDs) … ", end="", flush=True)
-
-    job_id = submit_batch(batch)
-    wait_for_job(job_id)
-    batch_results = fetch_results(job_id)
-    all_results.extend(batch_results)
-    print(f"→ {len(batch_results)} mappings found.")
-
-print(f"\n  Total mappings collected: {len(all_results):,}")
+def deduplicate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Deduplicate by (UniProtKB_AC, Ensembl_Protein) pairs while preserving order."""
+    seen: set[tuple[str, str]] = set()
+    unique_rows: list[dict[str, str]] = []
+    for row in rows:
+        key = (row["UniProtKB_AC"], row["Ensembl_Protein"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_rows.append(row)
+    return unique_rows
 
 
-# ── Step 3: Write CSV ───────────────────────────────────────────────────────────
-print(f"\nStep 3 – Writing CSV to {OUTPUT_FILE} …")
+def write_csv(output_file: Path, rows: list[dict[str, str]]) -> None:
+    print(f"\nStep 3 - Writing CSV to {output_file} ...")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["UniProtKB_AC", "Ensembl_Protein"])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"  Done! {len(rows):,} rows written to:\n  {output_file}")
 
-with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as fh:
-    writer = csv.DictWriter(fh, fieldnames=["UniProtKB_AC", "Ensembl_Protein"])
-    writer.writeheader()
-    writer.writerows(all_results)
 
-print(f"  Done! {len(all_results):,} rows written to:\n  {OUTPUT_FILE}")
+def main() -> None:
+    ensp_list = extract_unique_ensp_ids(INPUT_FILE)
+
+    print("\nStep 2 - Submitting ID mapping jobs to UniProt ...")
+    all_results: list[dict[str, str]] = []
+    total_batches = (len(ensp_list) + BATCH_SIZE - 1) // BATCH_SIZE
+
+    for batch_num in range(total_batches):
+        start = batch_num * BATCH_SIZE
+        end = (batch_num + 1) * BATCH_SIZE
+        batch = ensp_list[start:end]
+        print(f"  Batch {batch_num + 1}/{total_batches} ({len(batch)} IDs) ... ", end="", flush=True)
+
+        job_id = submit_batch(batch)
+        wait_for_job(job_id)
+        batch_results = fetch_results(job_id)
+        all_results.extend(batch_results)
+        print(f"-> {len(batch_results)} mappings found.")
+
+    print(f"\n  Total mappings collected (before dedupe): {len(all_results):,}")
+    unique_results = deduplicate_rows(all_results)
+    print(f"  Total mappings after dedupe: {len(unique_results):,}")
+
+    write_csv(OUTPUT_FILE, unique_results)
+
+
+if __name__ == "__main__":
+    main()

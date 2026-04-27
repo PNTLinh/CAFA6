@@ -1,0 +1,9 @@
+biopython 
+scipy 
+numpy
+torch
+torchvision
+pandas
+networkx    
+tqdm
+dgl

@@ -41,16 +41,47 @@ def get_contact_map_from_gz(pdb_gz_path, distance_threshold=8.0):
     
     return ca_coords, dist_matrix, contact_map
 
-# === TEST THỬ TRÊN 1 FILE ===
 if __name__ == "__main__":
-    # Thay đường dẫn này bằng 1 file .gz bất kỳ trong máy bạn
-    sample_file = "D:/CAFA6/raw_data/struct_feature/AF-A0A0A0MS03-F1-model_v6.pdb.gz"
-    
-    if Path(sample_file).exists():
-        coords, d_map, c_map = get_contact_map_from_gz(sample_file)
-        print(f"Protein có {len(coords)} axit amin (Nút).")
-        print(f"Kích thước Ma trận kề (Edges): {c_map.shape}")
-        print("\nMột góc của Ma trận kề (Contact Map):")
-        print(c_map[:5, :5])
-    else:
-        print("Vui lòng kiểm tra lại đường dẫn file mẫu!")
+    from tqdm import tqdm
+
+    # ── Cấu hình đường dẫn ──────────────────────────────────────────────────
+    STRUCT_DIR = Path("D:/raw_data/struct_feature")
+    OUTPUT_DIR = Path("D:/CAFA6/proceed_data/proteins_edges")
+    THRESHOLD  = 8.0  # Angstrom
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    pdb_files = sorted(STRUCT_DIR.glob("*.pdb.gz"))
+    print(f"Tìm thấy {len(pdb_files)} file .pdb.gz — bắt đầu xử lý...")
+
+    ok_count  = 0
+    err_count = 0
+
+    for pdb_path in tqdm(pdb_files, desc="Extracting contact maps"):
+        try:
+            # Lấy UniProt ID từ tên file: AF-{ID}-F1-model_v6.pdb.gz
+            protein_id = pdb_path.name.split("-")[1]
+            out_file   = OUTPUT_DIR / f"{protein_id}.txt"
+
+            # Bỏ qua nếu đã xử lý (cho phép chạy lại mà không mất công)
+            if out_file.exists():
+                ok_count += 1
+                continue
+
+            coords, _, contact_map = get_contact_map_from_gz(pdb_path, THRESHOLD)
+
+            if len(coords) < 2:
+                print(f"\n[WARN] {pdb_path.name}: quá ít residue ({len(coords)}), bỏ qua.")
+                continue
+
+            # Lưu danh sách cạnh: mỗi dòng "node_i node_j"
+            edges = np.argwhere(contact_map == 1)
+            np.savetxt(out_file, edges, fmt="%d", delimiter=" ")
+            ok_count += 1
+
+        except Exception as e:
+            err_count += 1
+            print(f"\n[ERROR] {pdb_path.name}: {e}")
+
+    print(f"\nHoàn thành! ✓ {ok_count} protein | ✗ {err_count} lỗi")
+    print(f"Edge files lưu tại: {OUTPUT_DIR}")
