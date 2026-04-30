@@ -7,3 +7,5 @@ pandas
 networkx    
 tqdm
 dgl
+node2vec 
+networkx

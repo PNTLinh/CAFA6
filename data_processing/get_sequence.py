@@ -43,13 +43,12 @@ def seq2onehot(seq):
     return seqs_x
 
 
-df=pd.read_csv("/mnt/workspace/replicate/Struct2GO/data/protein_list.csv",sep=" ")
+df=pd.read_csv("D:/raw_data/train.csv",sep=" ")
 list1=df.values.tolist()
 protein_list = np.array(list1)
 
 protein_node2one_hot = {}
 protein_sequence = {}
-for path,dir_list,file_list in os.walk("/mnt/workspace/replicate/Struct2GO/raw_data/predicted_struct_protein_data"):
     for file_name in file_list:
         filename = file_name.split('-')[1]
         if(filename in protein_list):   
