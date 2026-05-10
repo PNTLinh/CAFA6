@@ -12,6 +12,7 @@ Workflow:
   3. Poll until the job finishes, then download + save as CSV.
 """
 
+import argparse
 import csv
 import time
 from pathlib import Path
@@ -19,8 +20,8 @@ from pathlib import Path
 import requests
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-INPUT_FILE = Path(r"D:\raw_data\ppi.txt")
-OUTPUT_FILE = Path(r"D:\CAFA6\proceed_data\uniprot_ensembl_mapping.csv")
+DEFAULT_INPUT_FILE = Path(r"D:\raw_data\ppi.txt")
+DEFAULT_OUTPUT_FILE = Path(r"D:\CAFA6\proceed_data\uniprot_ensembl_mapping.csv")
 
 UNIPROT_API = "https://rest.uniprot.org"
 BATCH_SIZE = 500       # UniProt recommends <= 500 IDs per batch
@@ -65,7 +66,6 @@ def extract_unique_ensp_ids(input_file: Path) -> list[str]:
         raise FileNotFoundError(f"Input file not found: {input_file}")
 
     with input_file.open("rt", encoding="utf-8") as fh:
-        next(fh, None)  # skip header if present
         for line in fh:
             parts = line.rstrip().split()
             if len(parts) < 2:
@@ -181,7 +181,12 @@ def write_csv(output_file: Path, rows: list[dict[str, str]]) -> None:
 
 
 def main() -> None:
-    ensp_list = extract_unique_ensp_ids(INPUT_FILE)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--input-file", type=Path, default=DEFAULT_INPUT_FILE, help="STRING/PPI link file containing ENSP ids")
+    parser.add_argument("--output-file", type=Path, default=DEFAULT_OUTPUT_FILE, help="CSV output file for UniProt mappings")
+    args = parser.parse_args()
+
+    ensp_list = extract_unique_ensp_ids(args.input_file)
 
     print("\nStep 2 - Submitting ID mapping jobs to UniProt ...")
     all_results: list[dict[str, str]] = []
@@ -203,7 +208,7 @@ def main() -> None:
     unique_results = deduplicate_rows(all_results)
     print(f"  Total mappings after dedupe: {len(unique_results):,}")
 
-    write_csv(OUTPUT_FILE, unique_results)
+    write_csv(args.output_file, unique_results)
 
 
 if __name__ == "__main__":

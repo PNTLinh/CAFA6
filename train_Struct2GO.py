@@ -82,9 +82,8 @@ if __name__ == "__main__":
     train_dataloader = GraphDataLoader(dataset=train_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
     valid_dataloader = GraphDataLoader(dataset=valid_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
     
-    # TODO: 这里的输入特征应该是one-hot(26)+node2vec(30) = 56
-    # 但暂时没做特征拼接，先用node2vec特征试试
-    model = SAGNetworkHierarchical(30, 512, labels_num, num_convs=6, pool_ratio=0.75, dropout=dropout).to(device)
+    # 数据处理默认输出 onehot(26) + PPI node2vec(30) = 56-dim
+    model = SAGNetworkHierarchical(56, 512, labels_num, num_convs=6, pool_ratio=0.75, dropout=dropout).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learningrate)
     lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=epoch_num*len(train_dataloader))
     criterion = nn.CrossEntropyLoss()

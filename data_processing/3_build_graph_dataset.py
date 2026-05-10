@@ -37,7 +37,7 @@ BASE_DIR    = Path("D:/CAFA6")
 PROC_DIR    = BASE_DIR / "proceed_data"
 EDGES_DIR   = PROC_DIR / "proteins_edges"
 
-NODE2VEC_PATH   = PROC_DIR / "protein_node2vec"          # 30-dim PPI feature
+NODE2VEC_PATH   = PROC_DIR / "protein_node2vec"          # 30-dim PPI-based protein feature
 ONEHOT_PATH     = PROC_DIR / "protein_node2onehot"       # 26-dim one-hot per residue
 SEQ_FEAT_PATH   = PROC_DIR / "dict_sequence_feature"     # 1024-dim SeqVec
 PPI_INDEX_PATH  = PROC_DIR / "ppi_protein_index"         # {UniProtKB_AC → node_id trong PPI graph}
@@ -49,7 +49,7 @@ ACS_FILES = {
 }
 
 # Chọn loại node feature: "node2vec" (30-dim) hoặc "onehot" (26-dim) hoặc "concat" (56-dim)
-NODE_FEAT_MODE = "node2vec"   # Khớp với model input_dim=30 trong train_Struct2GO.py
+NODE_FEAT_MODE = "concat"   # Ghép onehot(26) + PPI node2vec(30) = 56
 
 # ── Tải node features ──────────────────────────────────────────────────────────
 print("=" * 60)
@@ -230,7 +230,9 @@ for ns_type, acs_path in ACS_FILES.items():
         g = dgl.graph((src_nodes, dst_nodes), num_nodes=num_residues)
 
         # --- Node feature ---
-        g.ndata["h"] = build_node_feature(protein_id, num_residues)
+        node_feat = build_node_feature(protein_id, num_residues)
+        g.ndata["h"] = node_feat
+        g.ndata["feature"] = node_feat
 
         emb_graph[protein_id] = g
 
