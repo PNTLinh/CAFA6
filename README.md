@@ -33,7 +33,7 @@ Expected resources:
 
 ### 2.2 UniProt mapping from STRING ENSP ids
 
-Script: `data_processing/uniprot_mapping.py`
+Script: `data_processing/3_uniprot_mapping.py`
 
 Purpose:
 
@@ -44,10 +44,10 @@ Purpose:
 Run:
 
 ```bash
-python data_processing/uniprot_mapping.py
+python data_processing/3_uniprot_mapping.py --input-file D:/raw_data/ppi.txt --output-file D:/CAFA6/proceed_data/uniprot_ensembl_mapping.csv
 ```
 
-Note: adjust `INPUT_FILE` in the script to your local STRING txt path.
+If you use another PPI file, only change `--input-file`. The output CSV is used by the PPI embedding step below.
 
 ### 2.3 Build protein contact map edges (if not already available)
 
@@ -61,20 +61,31 @@ Purpose:
 
 If you already have `proceed_data/proteins_edges/*.txt`, you can skip this step.
 
-### 2.4 Build node and sequence features
+### 2.4 Build PPI node2vec and sequence features
 
 Related files:
 
-- `data_processing/node2vec.ipynb`
-- `data_processing/read_node2vec_feature.py`
+- `data_processing/4_build_ppi_node2vec.py`
+- `data_processing/4_node2vec.ipynb` (legacy notebook version)
 - `data_processing/ESeq2vec.ipynb`
 - `data_processing/read_seqvec_features.py`
 
 Expected outputs used by next step:
-
 - `proceed_data/protein_node2vec`
 - `proceed_data/protein_node2onehot`
 - `proceed_data/dict_sequence_feature`
+
+Run the PPI embedding step after mapping:
+
+```bash
+python data_processing/4_build_ppi_node2vec.py \
+    --ppi-file D:/raw_data/ppi.txt \
+    --mapping-file D:/CAFA6/proceed_data/uniprot_ensembl_mapping.csv \
+    --valid-ids-file D:/CAFA6/proceed_data/valid_protein_ids.csv \
+    --output-file D:/CAFA6/proceed_data/protein_node2vec
+```
+
+This `protein_node2vec` file is the protein-level feature derived from the PPI network. If you replace the PPI file, rerun both the mapping step and this Node2Vec step.
 
 ### 2.5 Build graph dataset per GO branch
 
@@ -82,7 +93,7 @@ Script: `data_processing/3_build_graph_dataset.py`
 
 Purpose:
 
-- Merge contact-map graph, node features, sequence features, and GO labels
+- Merge residue contact-map graph, PPI-derived node features, sequence features, and GO labels
 - Build branch-specific artifacts for `bp`, `mf`, `cc`
 
 Run:
@@ -98,6 +109,8 @@ Main outputs (per branch):
 - `proceed_data/emb_label_{ns}`
 - `proceed_data/label_vocab_{ns}.json`
 - `proceed_data/label_{ns}_network`
+
+Important: this step writes node features under both `g.ndata["h"]` and `g.ndata["feature"]` so the current model code can read them without modification.
 
 ### 2.6 Split into train/valid/test
 
@@ -167,6 +180,7 @@ Outputs:
 - Some scripts still contain hard-coded paths from older environments (Linux paths like `/mnt/...` or `/etc/dsw/...`). Update paths before running in a new machine.
 - Some scripts fix GPU id in code (for example `cuda:0` / `cuda:7`). Change it to match your environment.
 - Keep feature dimensions consistent with model input:
-    - `train_Struct2GO.py` currently uses input dim `30`
+    - `train_Struct2GO.py` currently uses input dim `56`
     - `train_Struct2GO2.py` currently uses input dim `56`
-    Ensure `NODE_FEAT_MODE` in `data_processing/3_build_graph_dataset.py` matches your selected training script.
+    Ensure `NODE_FEAT_MODE` in `data_processing/3_build_graph_dataset.py` matches your selected training script. The default is now `concat`, which combines residue onehot(26) with PPI node2vec(30).
+- The PPI network is not passed into the model as a separate graph. It is converted into `protein_node2vec` and then used as the protein-level node feature for each residue graph.
