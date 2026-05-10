@@ -40,6 +40,7 @@ EDGES_DIR   = PROC_DIR / "proteins_edges"
 NODE2VEC_PATH   = PROC_DIR / "protein_node2vec"          # 30-dim PPI-based protein feature
 ONEHOT_PATH     = PROC_DIR / "protein_node2onehot"       # 26-dim one-hot per residue
 SEQ_FEAT_PATH   = PROC_DIR / "dict_sequence_feature"     # 1024-dim SeqVec
+PPI_INDEX_PATH  = PROC_DIR / "ppi_protein_index"         # {UniProtKB_AC → node_id trong PPI graph}
 
 ACS_FILES = {
     "bp": PROC_DIR / "human_BP_ACS.json",
@@ -78,6 +79,14 @@ if SEQ_FEAT_PATH.exists():
     print(f"  ✓ SeqVec  : {len(dict_seq_feature):,} protein")
 else:
     print("  ✗ Không tìm thấy dict_sequence_feature — sequence feature sẽ là zero vector")
+
+ppi_protein_index: dict[str, int] = {}
+if PPI_INDEX_PATH.exists():
+    with open(PPI_INDEX_PATH, "rb") as f:
+        ppi_protein_index = pickle.load(f)
+    print(f"  ✓ PPI index: {len(ppi_protein_index):,} protein")
+else:
+    print("  ✗ Không tìm thấy ppi_protein_index — chạy 4_build_ppi_graph.py trước")
 
 
 def build_node_feature(protein_id: str, num_residues: int) -> torch.Tensor:
@@ -200,10 +209,11 @@ for ns_type, acs_path in ACS_FILES.items():
         pickle.dump(label_graph, f)
     print(f"  Lưu label network → {label_net_path.name}  ({label_graph.num_nodes()} nodes, {label_graph.num_edges()} edges)")
 
-    # 4. Duyệt từng protein → xây DGL graph + label vector + seq feature
+    # 4. Duyệt từng protein → xây DGL graph + label vector + seq feature + ppi_node_id
     emb_graph       = {}
     emb_seq_feature = {}
     emb_label       = {}
+    emb_ppi_node_id = {}   # {protein_id → int node index trong PPI global graph}
 
     skipped = 0
     for protein_id, go_terms in tqdm(protein_labels.items(), desc=f"  Building {ns_type} graphs"):
@@ -240,13 +250,17 @@ for ns_type, acs_path in ACS_FILES.items():
                 label_vec[term2idx[t]] = 1.0
         emb_label[protein_id] = label_vec
 
+        # --- PPI node id (index trong PPI global graph) ---
+        emb_ppi_node_id[protein_id] = ppi_protein_index.get(protein_id, -1)
+
     print(f"  ✓ {len(emb_graph):,} protein có đủ dữ liệu  |  ✗ {skipped} bị bỏ qua (thiếu contact map)")
 
     # 5. Lưu ra file pickle
     for obj, name in [
-        (emb_graph,       f"emb_graph_{ns_type}"),
-        (emb_seq_feature, f"emb_seq_feature_{ns_type}"),
-        (emb_label,       f"emb_label_{ns_type}"),
+        (emb_graph,        f"emb_graph_{ns_type}"),
+        (emb_seq_feature,  f"emb_seq_feature_{ns_type}"),
+        (emb_label,        f"emb_label_{ns_type}"),
+        (emb_ppi_node_id,  f"emb_ppi_node_id_{ns_type}"),
     ]:
         out_path = PROC_DIR / name
         with open(out_path, "wb") as f:
