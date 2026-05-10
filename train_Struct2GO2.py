@@ -57,9 +57,9 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     # 根据选择的标签大类自动填写训练文件路径
-    train_data_path = '/etc/dsw/divided_data/'+args.branch+'_train_dataset'
-    valid_data_path = '/etc/dsw/divided_data/'+args.branch+'_valid_dataset'
-    label_network_path = 'processed_data/label_'+args.branch+'_network'
+    train_data_path = 'D:/CAFA6/divided_data/'+args.branch+'_train_dataset'
+    valid_data_path = 'D:/CAFA6/divided_data/'+args.branch+'_valid_dataset'
+    label_network_path = 'D:/CAFA6/proceed_data/label_'+args.branch+'_network'
     
     logger = create_logger(args.branch)
     
@@ -70,6 +70,11 @@ if __name__ == "__main__":
     with open(label_network_path,'rb')as f:
         label_network=pickle.load(f)
     label_network = label_network.to(device)
+
+    ppi_graph_path = 'proceed_data/ppi_graph_global'
+    with open(ppi_graph_path, 'rb') as f:
+        ppi_graph = pickle.load(f)
+    ppi_graph = ppi_graph.to(device)
 
     # 载入/设置参数
     epoch_num = 20
@@ -82,8 +87,13 @@ if __name__ == "__main__":
     train_dataloader = GraphDataLoader(dataset=train_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
     valid_dataloader = GraphDataLoader(dataset=valid_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
     
-    # 数据处理默认输出 onehot(26) + PPI node2vec(30) = 56-dim
-    model = SAGNetworkHierarchical(56, 512, labels_num, num_convs=6, pool_ratio=0.75, dropout=dropout).to(device)
+    # TODO: 这里的输入特征应该是one-hot(26)+node2vec(30) = 56
+    # 但暂时没做特征拼接，先用node2vec特征试试
+    model = SAGNetworkHierarchical(
+        56, 512, labels_num,
+        num_convs=6, pool_ratio=0.75, dropout=dropout,
+        seq_dim=1280, ppi_in_dim=1280, ppi_hid_dim=512, ppi_out_dim=256,
+    ).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learningrate)
     lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=epoch_num*len(train_dataloader))
     criterion = nn.CrossEntropyLoss()
@@ -101,16 +111,16 @@ if __name__ == "__main__":
         train_loss = 0
         print("training")
         logger.info("training")
-        for i,(pids, graphs, labels, seq_feats) in tqdm(enumerate(train_dataloader)):
+        for i,(pids, graphs, labels, seq_feats, ppi_node_ids) in tqdm(enumerate(train_dataloader)):
             graphs = graphs.to(device)
             seq_feats = seq_feats.to(device)
             labels = labels.to(device)
+            ppi_node_ids = ppi_node_ids.to(device)
             labels = torch.squeeze(labels)
             if len(labels.shape)==1:
                 labels = labels.unsqueeze(0)
-            #print(labels, "\n",labels.shape)
             optimizer.zero_grad()
-            logits = model(graphs,seq_feats,label_network)
+            logits = model(graphs, seq_feats, label_network, ppi_graph, ppi_node_ids)
             '''
             print(f"this is the logits shape : {logits.shape}")
             print("this is logits :")
@@ -135,15 +145,16 @@ if __name__ == "__main__":
             pred = []
             actual = []
             with torch.no_grad():
-                for i,(pids, graphs, labels, seq_feats) in tqdm(enumerate(valid_dataloader)):
+                for i,(pids, graphs, labels, seq_feats, ppi_node_ids) in tqdm(enumerate(valid_dataloader)):
                     graphs = graphs.to(device)
                     seq_feats = seq_feats.to(device)
                     labels = labels.to(device)
+                    ppi_node_ids = ppi_node_ids.to(device)
                     labels = torch.squeeze(labels)
                     if len(labels.shape)==1:
                         labels = labels.unsqueeze(0)
-                    
-                    logits = model(graphs,seq_feats,label_network)
+
+                    logits = model(graphs, seq_feats, label_network, ppi_graph, ppi_node_ids)
                     logits = F.sigmoid(logits)
                     
                     loss = criterion(logits,labels)

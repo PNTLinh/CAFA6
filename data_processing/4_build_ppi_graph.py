@@ -4,7 +4,7 @@
 Xây dựng PPI (Protein-Protein Interaction) Global Graph từ STRING database.
 
 Input:
-  raw_data/9606.protein.links.v12.0.txt     ← STRING PPI file (tab/space separated)
+  raw_data/ppi.txt                          ← STRING PPI file (tab/space separated)
   proceed_data/uniprot_ensembl_mapping.csv  ← ENSP → UniProtKB_AC (từ bước uniprot_mapping.py)
   proceed_data/human_BP_ACS.json            ← để lấy tập protein hợp lệ
 
@@ -13,8 +13,8 @@ Output:
   proceed_data/ppi_protein_index            ← dict {UniProtKB_AC → node_id}
 
 Node feature của PPI graph:
-  - Mặc định: vector zero (1024-dim) — sẽ được cập nhật bởi GNN trong lúc train
-  - Nếu có dict_sequence_feature → gắn seq embedding 1024-dim làm initial node feature
+  - Mặc định: vector zero (1280-dim) — sẽ được cập nhật bởi GNN trong lúc train
+  - Nếu có dict_sequence_feature → gắn seq embedding 1280-dim (ESM-2) làm initial node feature
 """
 
 import csv
@@ -31,7 +31,7 @@ BASE_DIR   = Path("D:/CAFA6")
 RAW_DIR    = Path("D:/raw_data")
 PROC_DIR   = BASE_DIR / "proceed_data"
 
-STRING_FILE   = RAW_DIR / "9606.protein.links.v12.0.txt"
+STRING_FILE   = RAW_DIR / "ppi.txt"
 MAPPING_FILE  = PROC_DIR / "uniprot_ensembl_mapping.csv"
 SEQ_FEAT_PATH = PROC_DIR / "dict_sequence_feature"
 
@@ -42,7 +42,7 @@ ACS_FILE = PROC_DIR / "human_BP_ACS.json"
 # 400=medium, 700=high, 900=very high
 PPI_SCORE_THRESHOLD = 700
 
-NODE_FEAT_DIM = 1024   # khớp với sequence feature dim
+NODE_FEAT_DIM = 1280   # ESM-2 esm2_t33_650M_UR50D output dim
 
 # ── Bước 1: Lấy tập protein hợp lệ từ GO annotation ─────────────────────────
 print("=" * 60)

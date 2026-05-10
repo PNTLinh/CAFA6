@@ -9,3 +9,5 @@ tqdm
 dgl
 node2vec 
 networkx
+allenlp
+

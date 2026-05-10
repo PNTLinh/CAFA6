@@ -54,7 +54,8 @@ class SAGNetworkHierarchical(torch.nn.Module):
     """
     def __init__(self, in_dim: int, hid_dim: int, out_dim: int, num_convs: int = 3,
                  pool_ratio: float = 0.5, dropout: float = 0.5,
-                 ppi_in_dim: int = 1024, ppi_hid_dim: int = 512, ppi_out_dim: int = 256):
+                 seq_dim: int = 1280,
+                 ppi_in_dim: int = 1280, ppi_hid_dim: int = 512, ppi_out_dim: int = 256):
         super(SAGNetworkHierarchical, self).__init__()
 
         self.dropout = dropout
@@ -75,8 +76,8 @@ class SAGNetworkHierarchical(torch.nn.Module):
             dropout=dropout,
         )
 
-        # Fusion: struct(hid*2) + seq(1024) + ppi(ppi_out_dim)
-        fusion_dim = hid_dim * 2 + 1024 + ppi_out_dim
+        # Fusion: struct(hid*2) + seq(seq_dim) + ppi(ppi_out_dim)
+        fusion_dim = hid_dim * 2 + seq_dim + ppi_out_dim
         self.lin1 = torch.nn.Linear(fusion_dim, hid_dim * 2)
         self.lin2 = torch.nn.Linear(hid_dim * 2, hid_dim)
         self.lin3 = torch.nn.Linear(hid_dim, out_dim)
