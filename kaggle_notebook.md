@@ -21,59 +21,63 @@ Nếu GitHub chưa cập nhật: upload/copy `model/dgl_patch.py` mới (có pat
 
 ```python
 !pip install -q packaging fair-esm transformers biopython tqdm
-!pip uninstall -y dgl
-!pip install -q torchdata==0.11.0
+!pip uninstall -y dgl torchdata
 !pip install -q dgl==2.1.0
-!python /kaggle/working/CAFA6/model/dgl_patch.py
+!python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
 ```
 
-Phải thấy **2 dòng** patch:
+Phải in: `OK  DGL 2.1.0  GraphDataLoader OK  device=cuda:0`
 
-```
-[dgl_patch] .../dgl/graphbolt/base.py
-[dgl_patch] .../dgl/graphbolt/__init__.py
-[dgl_patch] OK  DGL 2.1.0 ...
-```
+### Cell 2 dự phòng (upload `scripts/kaggle_fix_dgl.py` nếu chưa có trên repo)
 
-### Cell 2 dự phòng (không cần file repo)
+Chỉ dùng nếu không có `kaggle_fix_dgl.py` — tốt nhất copy file script từ repo.
 
 ```python
-!pip install -q torchdata==0.11.0 dgl==2.1.0
+!pip uninstall -y dgl torchdata
+!pip install -q dgl==2.1.0
+!python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
+```
+
+<details><summary>Cell patch thủ công (cũ)</summary>
+
+```python
+!pip uninstall -y dgl torchdata
+!pip install -q dgl==2.1.0
 import importlib, site, shutil, sys
 from pathlib import Path
 
-def purge(p):
-    for k in list(sys.modules):
-        if k == p or k.startswith(p + "."):
-            del sys.modules[k]
-
-purge("torchdata"); purge("dgl")
-td = importlib.import_module("torchdata")
-assert getattr(td, "__path__", None), "torchdata phải là package thật, không phải shim"
-importlib.import_module("torchdata.dataloader2.graph")
+REPL = [
+    ("from torchdata.datapipes.iter import IterableWrapper, IterDataPipe",
+     "from torch.utils.data import IterDataPipe\nfrom torch.utils.data.datapipes.iter import IterableWrapper"),
+    ("from torchdata.datapipes.iter import IterDataPipe", "from torch.utils.data import IterDataPipe"),
+    ("import torchdata.datapipes as dp", "import torch.utils.data.datapipes as dp"),
+    ("import torchdata.dataloader2.graph as dp_utils", "dp_utils = None  # patched"),
+    ("from torch.utils.data import functional_datapipe",
+     "def functional_datapipe(name):\n    def _d(c): return c\n    return _d"),
+    ("from .dataloader import *", "from .dataloader import GraphDataLoader  # patched"),
+    ("from .dist_dataloader import *", "# from .dist_dataloader import *  # patched"),
+    ("from ..distributed import DistGraph",
+     "try:\n    from ..distributed import DistGraph\nexcept Exception:\n    class DistGraph: pass"),
+]
+for k in list(sys.modules):
+    if k == "dgl" or k.startswith("dgl.") or k == "torchdata" or k.startswith("torchdata."):
+        del sys.modules[k]
 
 for sp in site.getsitepackages():
     root = Path(sp) / "dgl"
-    if not (root / "graphbolt/base.py").exists():
+    if not (root / "graphbolt").is_dir():
         continue
-    (root / "graphbolt/base.py").write_text(
-        (root / "graphbolt/base.py").read_text().replace(
-            "from torchdata.datapipes.iter import IterDataPipe",
-            "from torch.utils.data import IterDataPipe",
-        )
-    )
-    init = root / "graphbolt/__init__.py"
-    init.write_text(
-        init.read_text().replace(
-            "from .dataloader import *",
-            "# from .dataloader import *  # patched",
-        )
-    )
-    shutil.rmtree(root / "graphbolt/__pycache__", ignore_errors=True)
-    print("patched", root)
+    for py in root.rglob("*.py"):
+        t = py.read_text()
+        n = t
+        for a, b in REPL:
+            n = n.replace(a, b)
+        if n != t:
+            py.write_text(n)
+            shutil.rmtree(py.parent / "__pycache__", ignore_errors=True)
+            print("patched", py.relative_to(root))
     break
 
-purge("dgl")
 dgl = importlib.import_module("dgl")
 import torch
 g = dgl.graph(([0,1],[1,2]))
@@ -81,6 +85,8 @@ if torch.cuda.is_available():
     g = g.to("cuda")
 print("OK", dgl.__version__, g.device)
 ```
+
+</details>
 
 ---
 
