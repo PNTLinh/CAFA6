@@ -42,19 +42,21 @@ Thresholds = [x/100 for x in range(1,100)]
 
 if __name__ == "__main__":
     
-    device = "cuda:0"
-    #参数设置
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-branch', '--branch',type=str,default='mf')
     parser.add_argument('-thresh', '--thresh',type=float,default=0.71)
     parser.add_argument('-batch', '--batch', type = str, default = '1')
+    parser.add_argument('-model_path', '--model_path', type=str, default='')
     args = parser.parse_args()
     
     input_thresh = args.thresh
-    test_data_path = '/etc/dsw/divided_data/'+args.branch+'_test_dataset'
-    label_network_path = 'processed_data/label_'+args.branch+'_network'
-    term2idx_path = 'processed_data/'+args.branch+'_term2idx.json'
-    model_path = 'save_models/bestmodel_'+args.branch+'_32_0.0001_0.2.pkl'
+    data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")
+    test_data_path = f'{data_dir}/divided_data/{args.branch}_test_dataset'
+    label_network_path = f'{data_dir}/proceed_data/label_{args.branch}_network'
+    term2idx_path = f'{data_dir}/proceed_data/label_vocab_{args.branch}.json'
+    ppi_graph_path = f'{data_dir}/proceed_data/ppi_graph_global'
+    model_path = args.model_path or f'save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl'
     
     logger = create_logger(args.branch)
     
@@ -63,13 +65,17 @@ if __name__ == "__main__":
     with open(label_network_path,'rb') as f:
         label_network = pickle.load(f)
     with open(term2idx_path,'r') as f:
-        term2idx = json.load(f)
-        idx2term = term2idx.keys()
+        idx2term = json.load(f)
+    with open(ppi_graph_path, 'rb') as f:
+        ppi_graph = pickle.load(f)
     label_network = label_network.to(device)
-    #prevent loop
-    #label_network = dgl.remove_self_loop(label_network)
-    #label_topo_order_list = dgl.topological_nodes_generator(label_network)
-    model = torch.load(model_path)
+    model = torch.load(model_path, map_location=device)
+    model = model.to(device)
+    ppi_graph = ppi_graph.to(device)
+    ppi_node_emb = None
+    if hasattr(model, 'encode_ppi_nodes'):
+        with torch.no_grad():
+            ppi_node_emb = model.encode_ppi_nodes(ppi_graph)
 
     batch_size = 32
     test_dataloader = GraphDataLoader(dataset=test_dataset, batch_size = batch_size, drop_last = False, shuffle = False)
@@ -85,18 +91,22 @@ if __name__ == "__main__":
     model.eval()
     print("testing")
     with torch.no_grad():
-        for i, (pids, graphs, labels, seq_feats) in tqdm(enumerate(test_dataloader)):
+        for i, (pids, graphs, labels, seq_feats, ppi_node_ids) in tqdm(enumerate(test_dataloader)):
             graphs = graphs.to(device)
             seq_feats = seq_feats.to(device)
             labels = labels.to(device)
+            ppi_node_ids = ppi_node_ids.to(device)
             labels = torch.squeeze(labels)
             if len(labels.shape)==1:
                 labels = labels.unsqueeze(0)
             
-            logits = model(graphs,seq_feats,label_network)
+            logits = model(
+                graphs, seq_feats, label_network,
+                ppi_graph=ppi_graph, ppi_node_ids=ppi_node_ids, ppi_node_emb=ppi_node_emb,
+            )
             logits = F.sigmoid(logits)
             
-            loss = criterion(logits,labels)
+            loss = criterion(logits, labels.float())
             
             protein_list += pids
             t_loss += loss.item()

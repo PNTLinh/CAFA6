@@ -3,7 +3,7 @@ import torch.nn
 import torch.nn.functional as F
 import dgl
 from dgl.nn import GraphConv, GATConv, AvgPooling, MaxPooling, SAGEConv
-from model.layer import ConvPoolBlock, SAGPool
+from model.layer import ConvPoolBlock, SAGPool, MultiModalCrossAttention
 
 
 class PPIEncoder(torch.nn.Module):
@@ -21,22 +21,27 @@ class PPIEncoder(torch.nn.Module):
         self.sage2 = SAGEConv(hid_dim, out_dim, aggregator_type="mean")
         self.dropout = dropout
 
+    def encode_all_nodes(self, ppi_graph: dgl.DGLGraph) -> torch.Tensor:
+        """Encode toàn bộ PPI graph một lần — dùng cho cache trên GPU (Kaggle T4)."""
+        h = ppi_graph.ndata["feat"]
+        h = F.relu(self.sage1(ppi_graph, h))
+        h = F.dropout(h, p=self.dropout, training=self.training)
+        return self.sage2(ppi_graph, h)
+
+    @staticmethod
+    def gather_batch(node_emb: torch.Tensor, node_ids: torch.Tensor) -> torch.Tensor:
+        valid_mask = node_ids >= 0
+        out = torch.zeros(node_ids.shape[0], node_emb.shape[1], device=node_emb.device, dtype=node_emb.dtype)
+        out[valid_mask] = node_emb[node_ids[valid_mask]]
+        return out
+
     def forward(self, ppi_graph: dgl.DGLGraph, node_ids: torch.Tensor) -> torch.Tensor:
         """
         ppi_graph : DGL graph toàn cục (đã ở đúng device), ndata["feat"] (N, in_dim)
         node_ids  : LongTensor [batch_size] — index node của từng protein (-1 = absent)
         returns   : FloatTensor [batch_size, out_dim]
         """
-        h = ppi_graph.ndata["feat"]                       # (N, in_dim)
-        h = F.relu(self.sage1(ppi_graph, h))
-        h = F.dropout(h, p=self.dropout, training=self.training)
-        h = self.sage2(ppi_graph, h)                      # (N, out_dim)
-
-        # Lấy embedding cho từng protein trong batch; xử lý trường hợp node_id == -1
-        valid_mask = node_ids >= 0
-        out = torch.zeros(node_ids.shape[0], h.shape[1], device=h.device, dtype=h.dtype)
-        out[valid_mask] = h[node_ids[valid_mask]]
-        return out
+        return self.gather_batch(self.encode_all_nodes(ppi_graph), node_ids)
 
 
 class SAGNetworkHierarchical(torch.nn.Module):
@@ -54,7 +59,9 @@ class SAGNetworkHierarchical(torch.nn.Module):
     """
     def __init__(self, in_dim: int, hid_dim: int, out_dim: int, num_convs: int = 3,
                  pool_ratio: float = 0.5, dropout: float = 0.5,
-                 ppi_in_dim: int = 1024, ppi_hid_dim: int = 512, ppi_out_dim: int = 256):
+                 seq_dim: int = 640,
+                 ppi_in_dim: int = 640, ppi_hid_dim: int = 512, ppi_out_dim: int = 256,
+                 fusion_attn_heads: int = 4):
         super(SAGNetworkHierarchical, self).__init__()
 
         self.dropout = dropout
@@ -75,8 +82,16 @@ class SAGNetworkHierarchical(torch.nn.Module):
             dropout=dropout,
         )
 
-        # Fusion: struct(hid*2) + seq(1024) + ppi(ppi_out_dim)
-        fusion_dim = hid_dim * 2 + 1024 + ppi_out_dim
+        # Fusion: struct + seq cross-attend to PPI (thay cho concat)
+        self.fusion_attn = MultiModalCrossAttention(
+            struct_dim=hid_dim * 2,
+            seq_dim=seq_dim,
+            ppi_dim=ppi_out_dim,
+            attn_dim=hid_dim,
+            num_heads=fusion_attn_heads,
+            dropout=dropout,
+        )
+        fusion_dim = self.fusion_attn.out_dim
         self.lin1 = torch.nn.Linear(fusion_dim, hid_dim * 2)
         self.lin2 = torch.nn.Linear(hid_dim * 2, hid_dim)
         self.lin3 = torch.nn.Linear(hid_dim, out_dim)
@@ -101,15 +116,21 @@ class SAGNetworkHierarchical(torch.nn.Module):
         return labels
     
 
+    def encode_ppi_nodes(self, ppi_graph: dgl.DGLGraph) -> torch.Tensor:
+        """Cache PPI node embeddings [N, ppi_out_dim] — gọi 1 lần/epoch khi train."""
+        return self.ppi_encoder.encode_all_nodes(ppi_graph)
+
     def forward(self, graph: dgl.DGLGraph, sequence_feature: torch.Tensor,
                 label_network: dgl.DGLGraph,
-                ppi_graph: dgl.DGLGraph, ppi_node_ids: torch.Tensor) -> torch.Tensor:
+                ppi_graph: dgl.DGLGraph = None, ppi_node_ids: torch.Tensor = None,
+                ppi_node_emb: torch.Tensor = None) -> torch.Tensor:
         """
         graph            : batched contact-map DGL graph
-        sequence_feature : [batch, 1024]
+        sequence_feature : [batch, seq_dim]
         label_network    : GO label co-occurrence graph (giữ nguyên, không dùng hiện tại)
-        ppi_graph        : PPI global DGL graph (đã ở đúng device)
+        ppi_graph        : PPI global DGL graph (bỏ qua nếu truyền ppi_node_emb)
         ppi_node_ids     : [batch] — index node của từng protein trong PPI graph
+        ppi_node_emb     : [N, ppi_out_dim] cache từ encode_ppi_nodes (tối ưu GPU)
         """
         # --- Protein structure branch ---
         feat = graph.ndata["feature"]
@@ -118,11 +139,12 @@ class SAGNetworkHierarchical(torch.nn.Module):
             graph, feat, readout = self.convpools[i](graph, feat)
             final_readout = readout if final_readout is None else final_readout + readout
 
-        # --- PPI branch ---
-        ppi_emb = self.ppi_encoder(ppi_graph, ppi_node_ids)  # [batch, ppi_out_dim]
-
-        # --- Feature fusion: struct + seq + ppi ---
-        final_readout = torch.cat((final_readout, sequence_feature, ppi_emb), dim=-1)
+        # --- PPI branch + cross-attention fusion ---
+        if ppi_node_emb is not None:
+            ppi_emb = PPIEncoder.gather_batch(ppi_node_emb, ppi_node_ids)
+        else:
+            ppi_emb = self.ppi_encoder(ppi_graph, ppi_node_ids)
+        final_readout = self.fusion_attn(final_readout, sequence_feature, ppi_emb)
 
         feat = F.relu(self.lin1(final_readout))
         feat = F.dropout(feat, p=self.dropout, training=self.training)

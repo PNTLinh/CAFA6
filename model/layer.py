@@ -20,10 +20,9 @@ class SAGPool(torch.nn.Module):
         super(SAGPool, self).__init__()
         self.in_dim = in_dim
         self.ratio = ratio
-        self.score_layer1 = GraphConv(in_dim, 1)
-        self.score_layer2 = GraphConv(in_dim, 1)
+        self.score_layer1 = GraphConv(in_dim, 1, allow_zero_in_degree=True)
+        self.score_layer2 = GraphConv(in_dim, 1, allow_zero_in_degree=True)
         self.non_linearity = non_linearity
-        self.allow_zero_in_degree = True 
     
     def forward(self, graph:dgl.DGLGraph, feature:torch.Tensor):
 
@@ -39,8 +38,10 @@ class SAGPool(torch.nn.Module):
         # So we manually set the 'batch_num_nodes' here.
         # Since global pooling has nothing to do with 'batch_num_edges',
         # we can leave it to be None or unchanged.
-        graph.set_batch_num_nodes(next_batch_num_nodes)
-        
+        # DGL 1.x: set_batch_num_nodes; DGL 2.x: batch info giữ qua node_subgraph
+        if hasattr(graph, "set_batch_num_nodes"):
+            graph.set_batch_num_nodes(next_batch_num_nodes)
+
         return graph, feature, perm
 
 
@@ -50,21 +51,58 @@ class ConvPoolBlock(torch.nn.Module):
     """
     def __init__(self, in_dim:int, out_dim:int, pool_ratio=0.5):
         super(ConvPoolBlock, self).__init__()
-        self.conv1 = GraphConv(in_dim, out_dim)
-        self.conv2 = GraphConv(out_dim, out_dim)
+        self.conv1 = GraphConv(in_dim, out_dim, allow_zero_in_degree=True)
+        self.conv2 = GraphConv(out_dim, out_dim, allow_zero_in_degree=True)
         self.pool = SAGPool(out_dim, ratio=pool_ratio)
         self.avgpool = AvgPooling()
         self.maxpool = MaxPooling()
         self.sumpool = SumPooling()
-        self.allow_zero_in_degree = True   
     
     def forward(self, graph, feature):
+        # Reshape động theo out_dim của conv (không hard-code 512)
         out = F.relu(self.conv1(graph, feature))
-        out = torch.reshape(out,(-1,512))
+        out = out.reshape(-1, out.shape[-1])
         out = F.relu(self.conv2(graph, out))
-        out = torch.reshape(out,(-1,512))
+        out = out.reshape(-1, out.shape[-1])
         out = F.relu(self.conv2(graph, out))
-        out = torch.reshape(out,(-1,512))
+        out = out.reshape(-1, out.shape[-1])
         graph, out, _ = self.pool(graph, out)
         g_out = torch.cat([self.maxpool(graph, out), self.sumpool(graph, out)], dim=-1)
-        return graph, out, g_out 
+        return graph, out, g_out
+
+
+class MultiModalCrossAttention(torch.nn.Module):
+    """Struct + sequence embeddings attend to PPI context via cross-attention."""
+
+    def __init__(
+        self,
+        struct_dim: int,
+        seq_dim: int,
+        ppi_dim: int,
+        attn_dim: int,
+        num_heads: int = 4,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        self.struct_proj = torch.nn.Linear(struct_dim, attn_dim)
+        self.seq_proj = torch.nn.Linear(seq_dim, attn_dim)
+        self.ppi_proj = torch.nn.Linear(ppi_dim, attn_dim)
+        self.cross_attn = torch.nn.MultiheadAttention(
+            attn_dim, num_heads, dropout=dropout, batch_first=True
+        )
+        self.norm = torch.nn.LayerNorm(attn_dim)
+        self.out_dim = attn_dim * 2
+
+    def forward(
+        self,
+        struct_feat: torch.Tensor,
+        seq_feat: torch.Tensor,
+        ppi_feat: torch.Tensor,
+    ) -> torch.Tensor:
+        query = torch.stack(
+            [self.struct_proj(struct_feat), self.seq_proj(seq_feat)], dim=1
+        )
+        ppi_ctx = self.ppi_proj(ppi_feat).unsqueeze(1)
+        attn_out, _ = self.cross_attn(query, ppi_ctx, ppi_ctx)
+        attn_out = self.norm(attn_out + query)
+        return attn_out.reshape(attn_out.shape[0], -1)

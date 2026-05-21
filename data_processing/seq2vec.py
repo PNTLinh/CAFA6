@@ -1,262 +1,175 @@
-import pickle
+"""
+seq2vec.py — ESM-2 sequence embedding
+======================================
+Thay thế SeqVec (allennlp) bằng ESM-2 của Meta AI.
+  - Model: esm2_t33_650M_UR50D  →  embedding 1280-dim
+  - Cài đặt: pip install fair-esm
+
+Input : file FASTA (UniProt format hoặc bất kỳ FASTA nào)
+Output: dict pickle {UniProtID → ndarray(1280,)}
+
+Cách lấy UniProtID từ FASTA header:
+  >sp|P12345|PROT_HUMAN ... → P12345
+  >P12345 ...               → P12345
+  >P12345|...               → P12345
+"""
+
 import argparse
-import datetime
+import os
+import pickle
 from pathlib import Path
 
 import numpy as np
 import torch
-from allennlp.commands.elmo import ElmoEmbedder
+from tqdm import tqdm
 
-def merge_two_dicts(x, y):
-    z = x.copy()   # start with x's keys and values
-    z.update(y)    # modifies z with y's keys and values & returns None
-    return z
-
-def get_elmo_model( model_dir, cpu, verbose ):
-    
-    weights_path = model_dir / 'weights.hdf5'
-    options_path = model_dir / 'options.json'
-
-    # if no pre-trained model is available, yet --> download it
-    if not (weights_path.exists() and options_path.exists()):
-        if verbose: 
-            print('No existing model found. Start downloading pre-trained SeqVec (~360MB)...')
-        import urllib.request
-        Path.mkdir(model_dir)
-        repo_link    = 'http://rostlab.org/~deepppi/embedding_repo/embedding_models/seqvec'
-        options_link = repo_link +'/options.json'
-        weights_link = repo_link +'/weights.hdf5'
-        urllib.request.urlretrieve( options_link, options_path )
-        urllib.request.urlretrieve( weights_link, weights_path )
-
-    cuda_device = 0 if torch.cuda.is_available() and not cpu else -1
-#    return ElmoEmbedder( weight_file=weights_path, options_file=options_path, cuda_device=cuda_device )
-        
+# Redirect torch hub cache to D: drive to avoid filling C: drive (model is ~1.3 GB)
+os.environ.setdefault("TORCH_HOME", "D:/torch_cache")
 
 
-def read_fasta( fasta_path, split_char, id_field ):
-    '''
-        Reads in fasta file containing multiple sequences.
-        Returns dictionary of holding multiple sequences or only single 
-        sequence, depending on input file.
-    '''
-    
-    sequences = dict()
-    with open( fasta_path, 'r' ) as fasta_f:
-        for line in fasta_f:
-            # get uniprot ID from header and create new entry
-            if line.startswith('>'):
-                uniprot_id = line.replace('>', '').strip().split(split_char)[id_field]
-                sequences[ uniprot_id ] = ''
-            else:
-                # repl. all whie-space chars and join seqs spanning multiple lines
-                sequences[ uniprot_id ] += ''.join( line.split() ).upper()
+# ── Đọc FASTA ────────────────────────────────────────────────────────────────
+def read_fasta(fasta_path: str) -> dict[str, str]:
+    """Trả về {protein_id: sequence}."""
+    sequences: dict[str, str] = {}
+    current_id = None
+    with open(fasta_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                header = line[1:]
+                # UniProt format: sp|P12345|NAME hoặc tr|P12345|NAME
+                parts = header.split("|")
+                if len(parts) >= 2 and parts[0] in ("sp", "tr"):
+                    current_id = parts[1]
+                else:
+                    current_id = parts[0].split()[0]
+                sequences[current_id] = ""
+            elif current_id is not None:
+                sequences[current_id] += line
     return sequences
 
 
-def process_embedding( embedding, per_protein ):
-    '''
-        Direct output of ELMo has shape (3,L,1024), with L being the protein's
-        length, 3 being the number of layers used to train SeqVec (1 CharCNN, 2 LSTMs)
-        and 1024 being a hyperparameter chosen to describe each amino acid.
-        When a representation on residue level is required, you can sum
-        over the first dimension, resulting in a tensor of size (L,1024).
-        If you want to reduce each protein to a fixed-size vector, regardless of its
-        length, you can average over dimension L.
-    '''
-    embedding = torch.tensor(embedding) # cast array to tensor
-    embedding = embedding.sum(dim=0) # sum over residue-embeddings of all layers (3k->1k)
-    if per_protein: # if embeddings are required on the level of whole proteins
-        embedding = embedding.mean(dim=0)
-    return embedding.cpu().detach().numpy() # cast to numpy array
+# ── Cấu hình model theo tên ───────────────────────────────────────────────────
+ESM2_CONFIGS = {
+    # name          : (loader_fn_name,       num_layers, emb_dim, file_size)
+    "8M"            : ("esm2_t6_8M_UR50D",    6,   320, "~31 MB  — rất nhanh trên CPU"),
+    "35M"           : ("esm2_t12_35M_UR50D",  12,  480, "~140 MB — nhanh trên CPU"),
+    "150M"          : ("esm2_t30_150M_UR50D", 30,  640, "~600 MB — trung bình"),
+    "650M"          : ("esm2_t33_650M_UR50D", 33, 1280, "~1.3 GB — chất lượng cao, cần GPU"),
+    "3B"            : ("esm2_t36_3B_UR50S",   36, 2560, "~5.5 GB — cần GPU mạnh"),
+}
 
 
+# ── Tạo embedding bằng ESM-2 ─────────────────────────────────────────────────
+def embed_with_esm2(sequences: dict[str, str], batch_size: int = 8,
+                    device: str = "cuda",
+                    model_size: str = "650M") -> dict[str, np.ndarray]:
+    """
+    Encode từng protein thành vector ESM-2 (mean pooling qua chiều dài).
+    Protein dài hơn 1022 residue sẽ bị cắt bớt (giới hạn ESM-2).
 
-def get_embeddings( seq_dir, emb_path, model_dir, split_char, id_field, cpu, 
-                       max_chars, per_protein, verbose ):
-
-    seq_dict = dict() 
-    emb_dict = dict()
-    
-    ####################### Read in FASTA file ###############################
-	#if seq_dir.is_file(): # if single fasta file should be processed
-	 #   seq_dict = read_fasta( seq_dir, split_char, id_field )
-   # elif not seq_dict: # if a directory was provided: read all files 
-	#    for seq_path in seq_dir.glob('**/*fasta*'):
-	 #       seq_dict = merge_two_dicts( seq_dict, read_fasta(seq_path, split_char, id_field))
-
-    seq_dict = read_fasta("./model/9606-seq.fa", "|", 1)
- #   seq_dict2 = dict()
- #   for k in seq_dict:
- #       if len(seq_dict[k]) <= 1000:
- #           seq_dict2[k] = seq_dict[k]
- #   seq_dict = seq_dict2
-    ####################### Sort sequences ###############################
-    # Sorting sequences according to length is crucial for speed as batches 
-    # of proteins with similar size increase throughput.
-    seq_dict = sorted(seq_dict.items(), key=lambda kv: len( seq_dict[kv[0]] ) )
-    
-    if verbose: print('Total number of sequences: {}'.format(len(seq_dict)))
-
-    model = get_elmo_model( model_dir, cpu, verbose )
-        
-    batch          = list()
-    length_counter = 0
-    
-    for index, (identifier, sequence) in enumerate(seq_dict): # for all sequences in the set
-
-        # append sequence to batch and sum amino acids over proteins in batch
-        batch.append( (identifier, sequence) )
-        length_counter += len(sequence)
-        
-        # Transform list of batches to embeddings
-        # if a) max. number of chars. for a batch is reached, 
-        # if b) sequence is longer than half  max_chars (avoids runtimeError for very long seqs.)
-        # if c) the last sequence is reached
-        if length_counter > max_chars or len(sequence)>max_chars/2 or index==len(seq_dict)-1:
-
-            # create List[List[str]] for batch-processing of ELMo
-            tokens = [ list(seq) for _, seq in batch]
-            embeddings = model.embed_sentences(tokens)
-            
-            #######################  Batch-Processing ####################### 
-            runtime_error = False
-            for batch_idx, (sample_id, seq) in enumerate(batch): # for each seq in the batch
-                try: # try to get the embedding for the current sequnce
-                    embedding = next(embeddings)
-                except RuntimeError:
-                    if verbose:
-                        print('RuntimeError for {} (len={}).'.format(sample_id,len(seq)))
-                        print('Starting single sequence processing')
-                    runtime_error = True
-                    break
-                
-                # if protein was embedded successfully --> save embedding
-                embedding = process_embedding( embedding, per_protein )
-                emb_dict[sample_id] = embedding
-
-            ################## Single Sequence Processing ####################
-            # Single sequence processing in case of runtime error due to 
-            # a) very long sequence or b) too large batch size
-            # If this fails, you might want to consider lowering max_chars and/or 
-            # cutting very long sequences into smaller chunks
-            if runtime_error:
-                for batch_idx, (sample_id, seq) in enumerate(batch):
-                    try:
-                        embedding = model.embed_sentence( tokens[batch_idx] )
-                    except RuntimeError:
-                        print('RuntimeError for {} (len={}).'.format(sample_id,len(seq)))
-                        print('Single sequence processing not possible. Skipping seq. ..' + 
-                              'Consider splitting the sequence into smaller seqs or process on CPU.')
-                        continue
-                    
-                    # if protein was embedded successfully --> save embedding
-                    embedding = process_embedding( embedding, per_protein )
-                    emb_dict[sample_id] = embedding
-            
-            ################## Reset batch ####################
-            batch = list()
-            length_counter = 0
-            if verbose: print('.', flush=True, end='')
-
-    if verbose: print('\nTotal number of embeddings: {}'.format(len(emb_dict)))
-
-    ################## Write embeddings to file ####################
+    model_size: "8M" | "35M" | "150M" | "650M" | "3B"
+      - CPU không có GPU → dùng "8M" hoặc "35M" cho tốc độ hợp lý
+      - Có GPU          → dùng "650M" để chất lượng cao nhất
+    """
     try:
-        if verbose: print('Writing embeddings to: {}'.format(emb_path))
-        # save elmo representations    
-        #np.savez( emb_path, **emb_dict)
-        with open(emb_path, 'wb') as f:
-            pickle.dump(emb_dict, f)
-    except ZeroDivisionError:
-        print('Error: Embedding dictionary is empty!')
+        import esm
+    except ImportError:
+        raise ImportError("Chưa cài fair-esm. Chạy: pip install fair-esm")
 
-    return None
+    cfg = ESM2_CONFIGS.get(model_size)
+    if cfg is None:
+        raise ValueError(f"model_size phải là một trong: {list(ESM2_CONFIGS)}")
+    loader_name, num_layers, emb_dim, size_hint = cfg
 
+    print(f"Đang tải model ESM-2 ({loader_name}, {size_hint})...")
+    loader = getattr(esm.pretrained, loader_name)
+    model, alphabet = loader()
+    batch_converter = alphabet.get_batch_converter()
+    model = model.eval().to(device)
 
-def create_arg_parser():
-    """"Creates and returns the ArgumentParser object."""
+    MAX_LEN = 1022  # giới hạn context của ESM-2
 
-    # Instantiate the parser
-    parser = argparse.ArgumentParser(description=( 
-            'embedder.py creates ELMo embeddings for a given text '+
-            ' file containing sequence(s) in FASTA-format.') )
-    
-    # Path to fasta file (required)
-    parser.add_argument( '-i', '--input', required=True, type=str,
-                    help='A path to a fasta-formatted text file containing protein sequence(s).' + 
-                            'Can also be a directory holding multiple fasta files.')
+    items = list(sequences.items())
+    emb_dict: dict[str, np.ndarray] = {}
 
-    # Path for writing embeddings (required)
-    parser.add_argument( '-o', '--output', required=True, type=str, 
-                    help='A path to a file for saving the created embeddings as NumPy .npz file.')
+    for i in tqdm(range(0, len(items), batch_size), desc=f"ESM-2 ({loader_name})"):
+        batch = items[i: i + batch_size]
+        batch_data = [(pid, seq[:MAX_LEN]) for pid, seq in batch]
 
-    # Path to model (optoinal)
-    parser.add_argument('--model', type=str, 
-                    default=Path.cwd() / 'model',
-                    help='A path to a directory holding a pre-trained ELMo model. '+
-                        'If the model is not found in this path, it will be downloaded automatically.' +
-                        'The file containing the weights of the model must be named weights.hdf5.' + 
-                        'The file containing the options of the model must be named options.json')
-    
-    # Create embeddings for a single protein or for all residues within a protein
-    parser.add_argument('--protein', type=bool, 
-                    default=False,
-                    help='Flag for summarizing embeddings from residue level to protein level ' +
-                    'via averaging. Default: False')
-    
-    # Number of residues within one batch
-    parser.add_argument('--batchsize', type=int, 
-                    default=15000,
-                    help='Number of residues which need to be accumulated before starting batch ' + 
-                    'processing. If you encounter an OutOfMemoryError, lower this value. Default: 15000')
-    
-    # Character for splitting fasta header
-    parser.add_argument('--split_char', type=str, 
-                    default='|',
-                    help='The character for splitting the FASTA header in order to retrieve ' +
-                        "the protein identifier. Should be used in conjunction with --id." +
-                        "Default: '|' ")
-    
-    # Field index for protein identifier in fasta header after splitting with --split_char 
-    parser.add_argument('--id', type=int, 
-                    default=0,
-                    help='The index for the uniprot identifier field after splitting the ' +
-                        "FASTA header after each symbole in ['|', '#', ':', ' ']." +
-                        'Default: 1')
-    
-    # Whether to use CPU or GPU
-    parser.add_argument('--cpu', type=bool, 
-                    default=False,
-                    help='Flag for using CPU to compute embeddings. Default: False')
-    
-    # Whether to print some statistics while processing
-    parser.add_argument('--verbose', type=bool, 
-                    default=True,
-                    help='Embedder gives some information while processing. Default: True')
-    return parser
+        try:
+            _, _, tokens = batch_converter(batch_data)
+            tokens = tokens.to(device)
+
+            with torch.no_grad():
+                results = model(tokens, repr_layers=[num_layers], return_contacts=False)
+
+            representations = results["representations"][num_layers]  # (B, L+2, D)
+
+            for j, (pid, seq) in enumerate(batch_data):
+                seq_len = min(len(seq), MAX_LEN)
+                emb = representations[j, 1: seq_len + 1].mean(0).cpu().numpy()
+                emb_dict[pid] = emb
+
+        except RuntimeError as e:
+            print(f"\n[WARN] Batch OOM, chuyển single mode: {e}")
+            for pid, seq in batch_data:
+                try:
+                    single_data = [(pid, seq)]
+                    _, _, tokens = batch_converter(single_data)
+                    tokens = tokens.to(device)
+                    with torch.no_grad():
+                        results = model(tokens, repr_layers=[num_layers])
+                    representations = results["representations"][num_layers]
+                    emb = representations[0, 1: len(seq) + 1].mean(0).cpu().numpy()
+                    emb_dict[pid] = emb
+                except Exception as e2:
+                    print(f"[ERROR] Bỏ qua {pid}: {e2}")
+
+    return emb_dict, emb_dim
 
 
+# ── Main ─────────────────────────────────────────────────────────────────────
 def main():
-    
-    start_time = datetime.datetime.now()
-    parser = create_arg_parser()
+    print("ESM-2 model sizes:")
+    for k, (fn, _, dim, hint) in ESM2_CONFIGS.items():
+        print(f"  --model {k:4s}  →  {dim}-dim  {hint}")
+    print()
 
+    parser = argparse.ArgumentParser(description="ESM-2 sequence embedding")
+    parser.add_argument("-i", "--input",  required=True, help="Path to FASTA file")
+    parser.add_argument("-o", "--output", required=True, help="Path to output pickle")
+    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--cpu", action="store_true", help="Force CPU")
+    parser.add_argument("--model", default="650M",
+                        choices=list(ESM2_CONFIGS),
+                        help="ESM-2 model size (default: 650M; dùng 8M/35M nếu chỉ có CPU)")
     args = parser.parse_args()
-    seq_dir   = Path( args.input )
-    emb_path  = Path( args.output)
-    model_dir = Path( args.model )
-    split_char= args.split_char
-    id_field  = args.id
-    cpu_flag  = args.cpu
-    per_prot  = args.protein
-    max_chars = args.batchsize
-    verbose   = args.verbose
-    
-    get_embeddings( seq_dir, emb_path, model_dir, split_char, id_field, 
-                       cpu_flag, max_chars, True, verbose )
-    end_time = datetime.datetime.now()
-    print((end_time - start_time).seconds)
 
-if __name__ == '__main__':
+    device = "cpu" if args.cpu or not torch.cuda.is_available() else "cuda"
+    print(f"Device: {device}")
+    if device == "cpu" and args.model in ("650M", "3B"):
+        print(f"[WARN] Model {args.model} trên CPU sẽ rất chậm (~50h cho 20K seq).")
+        print("       Dùng --model 8M hoặc --model 35M để nhanh hơn nhiều.\n")
+
+    print(f"Đọc FASTA: {args.input}")
+    sequences = read_fasta(args.input)
+    print(f"  {len(sequences):,} sequence")
+
+    emb_dict, emb_dim = embed_with_esm2(
+        sequences, batch_size=args.batch_size,
+        device=device, model_size=args.model,
+    )
+
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "wb") as f:
+        pickle.dump(emb_dict, f)
+
+    print(f"\nĐã lưu {len(emb_dict):,} embedding (dim={emb_dim}) → {out_path}")
+
+
+if __name__ == "__main__":
     main()
