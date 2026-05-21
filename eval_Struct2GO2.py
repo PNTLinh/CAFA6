@@ -3,6 +3,11 @@ from torch import nn
 import torch.nn.functional as F
 import argparse
 import numpy as np
+
+from model.dgl_compat import apply_dgl_compat
+
+apply_dgl_compat()
+
 import dgl
 from dgl.dataloading import GraphDataLoader
 from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_score, recall_score, f1_score, average_precision_score

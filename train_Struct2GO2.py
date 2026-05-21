@@ -4,6 +4,11 @@ import os
 import pickle
 import warnings
 
+# Phải chạy trước import dgl (subprocess train không dùng shim từ notebook)
+from model.dgl_compat import apply_dgl_compat
+
+apply_dgl_compat()
+
 import dgl
 import numpy as np
 import torch

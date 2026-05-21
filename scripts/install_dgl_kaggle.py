@@ -12,7 +12,22 @@ def pip(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-m", "pip", *args], capture_output=True, text=True)
 
 
+def register_torchdata_shim() -> None:
+    import types
+
+    import torch.utils.data.datapipes.iter as torch_iter
+
+    torchdata_mod = types.ModuleType("torchdata")
+    datapipes_mod = types.ModuleType("torchdata.datapipes")
+    datapipes_mod.iter = torch_iter
+    torchdata_mod.datapipes = datapipes_mod
+    sys.modules["torchdata"] = torchdata_mod
+    sys.modules["torchdata.datapipes"] = datapipes_mod
+    sys.modules["torchdata.datapipes.iter"] = torch_iter
+
+
 def try_import_cuda() -> bool:
+    register_torchdata_shim()
     import dgl
     import torch
 
@@ -26,8 +41,7 @@ def try_import_cuda() -> bool:
 def main() -> None:
     import torch
 
-    # DGL 2.x graphbolt requires torchdata (missing on Kaggle by default)
-    pip("install", "-q", "torchdata")
+    pip("install", "-q", "torchdata==0.7.1")
 
     pip("uninstall", "-y", "dgl")
 
