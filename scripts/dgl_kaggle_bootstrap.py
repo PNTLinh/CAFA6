@@ -1,4 +1,4 @@
-"""Kaggle: install DGL 2.1 + patch torchdata imports. Run once per session."""
+"""Kaggle: install DGL 2.1 + torchdata 0.11 + patch graphbolt/base.py."""
 from __future__ import annotations
 
 import subprocess
@@ -16,7 +16,9 @@ def pip(*args: str) -> int:
 def install_dgl() -> None:
     import torch
 
-    pip("uninstall", "-y", "dgl", "torchdata")
+    pip("uninstall", "-y", "dgl")
+    pip("install", "-q", "torchdata==0.11.0")
+
     cuda = torch.version.cuda
     if cuda:
         cu = "cu" + cuda.replace(".", "")

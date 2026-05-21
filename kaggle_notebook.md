@@ -1,16 +1,10 @@
-# Kaggle Notebook — CAFA6 (GPU T4)
+# Kaggle — CAFA6
 
-**Settings:** GPU T4 x1 · Internet ON · Add Data → dataset từ `pack_for_kaggle.py`
-
----
-
-## Bước 0 — Restart session
-
-Nếu từng chạy `torchdata==0.7.1` hoặc cell shim cũ: **Session → Restart session** (bắt buộc).
+**Restart session** nếu từng chạy shim `torchdata` cũ.
 
 ---
 
-## Cell 1 — Clone repo
+## Cell 1 — Clone
 
 ```python
 %cd /kaggle/working
@@ -19,32 +13,82 @@ Nếu từng chạy `torchdata==0.7.1` hoặc cell shim cũ: **Session → Resta
 %cd CAFA6
 ```
 
-Nếu GitHub chưa có bản mới, copy thư mục `model/dgl_patch.py` từ máy local vào `/kaggle/working/CAFA6/model/`.
+Nếu GitHub chưa cập nhật: upload/copy `model/dgl_patch.py` mới (có patch `graphbolt/__init__.py`).
 
 ---
 
-## Cell 2 — Cài + sửa DGL (quan trọng)
+## Cell 2 — DGL (copy nguyên khối)
 
 ```python
 !pip install -q packaging fair-esm transformers biopython tqdm
-!pip uninstall -y dgl torchdata
+!pip uninstall -y dgl
+!pip install -q torchdata==0.11.0
 !pip install -q dgl==2.1.0
 !python /kaggle/working/CAFA6/model/dgl_patch.py
 ```
 
-Phải in: `[dgl_patch] ... graphbolt/base.py` và `OK DGL 2.1.0`.
+Phải thấy **2 dòng** patch:
 
-**Không** cài `torchdata==0.7.1`. **Không** chạy cell shim cũ trong notebook.
+```
+[dgl_patch] .../dgl/graphbolt/base.py
+[dgl_patch] .../dgl/graphbolt/__init__.py
+[dgl_patch] OK  DGL 2.1.0 ...
+```
+
+### Cell 2 dự phòng (không cần file repo)
+
+```python
+!pip install -q torchdata==0.11.0 dgl==2.1.0
+import importlib, site, shutil, sys
+from pathlib import Path
+
+def purge(p):
+    for k in list(sys.modules):
+        if k == p or k.startswith(p + "."):
+            del sys.modules[k]
+
+purge("torchdata"); purge("dgl")
+td = importlib.import_module("torchdata")
+assert getattr(td, "__path__", None), "torchdata phải là package thật, không phải shim"
+importlib.import_module("torchdata.dataloader2.graph")
+
+for sp in site.getsitepackages():
+    root = Path(sp) / "dgl"
+    if not (root / "graphbolt/base.py").exists():
+        continue
+    (root / "graphbolt/base.py").write_text(
+        (root / "graphbolt/base.py").read_text().replace(
+            "from torchdata.datapipes.iter import IterDataPipe",
+            "from torch.utils.data import IterDataPipe",
+        )
+    )
+    init = root / "graphbolt/__init__.py"
+    init.write_text(
+        init.read_text().replace(
+            "from .dataloader import *",
+            "# from .dataloader import *  # patched",
+        )
+    )
+    shutil.rmtree(root / "graphbolt/__pycache__", ignore_errors=True)
+    print("patched", root)
+    break
+
+purge("dgl")
+dgl = importlib.import_module("dgl")
+import torch
+g = dgl.graph(([0,1],[1,2]))
+if torch.cuda.is_available():
+    g = g.to("cuda")
+print("OK", dgl.__version__, g.device)
+```
 
 ---
 
-## Cell 3 — Link data
+## Cell 3 — Data
 
 ```python
 !python /kaggle/working/CAFA6/scripts/kaggle_link_data.py
 ```
-
-Nếu lỗi: `!find /kaggle/input -name ppi_graph_global`
 
 ---
 
@@ -55,21 +99,4 @@ import os
 os.environ["DGL_CUDA"] = "1"
 os.environ["DATA_DIR"] = "/kaggle/working/CAFA6"
 !cd /kaggle/working/CAFA6 && python train_Struct2GO2.py -branch mf --kaggle
-```
-
-`train_Struct2GO2.py` tự gọi `ensure_dgl_importable()` — train chạy subprocess riêng, không dùng shim trong notebook.
-
----
-
-## Cell dự phòng (nếu Cell 2 vẫn lỗi)
-
-Chạy **trong notebook** (cùng kernel):
-
-```python
-import sys, site, shutil
-from pathlib import Path
-sys.path.insert(0, "/kaggle/working/CAFA6")
-from model.dgl_patch import patch_dgl_on_disk, ensure_dgl_importable
-print("patched files:", patch_dgl_on_disk())
-ensure_dgl_importable()
 ```
