@@ -24,29 +24,25 @@
 ## Cell 2 — Cài DGL + kiểm tra GPU
 
 ```python
-!pip install -q torchdata==0.7.1 packaging fair-esm transformers biopython tqdm
+!pip install -q packaging fair-esm transformers biopython tqdm
 !python /kaggle/working/CAFA6/scripts/dgl_kaggle_bootstrap.py
 ```
 
-Phải in ra dòng `OK  DGL ... device=cuda:0`. Nếu lỗi, **Restart session** và chạy lại Cell 1 → Cell 2.
+Phải in ra dòng `OK  DGL ... device=cuda:0`. Nếu vẫn lỗi `dgl/distributed` / `IterDataPipe`:
+
+1. **Restart session** (bắt buộc nếu từng cài `torchdata==0.7.1`)
+2. Chạy lại Cell 1 → Cell 2
+3. Test nhanh: `from model.dgl_compat import apply_dgl_compat; apply_dgl_compat(); import dgl`
 
 ---
 
 ## Cell 3 — Symlink dataset
 
 ```python
-from pathlib import Path
-
-input_dir = next(Path("/kaggle/input").iterdir())
-print("Dataset:", input_dir)
-
-!ln -sf {input_dir}/divided_data /kaggle/working/CAFA6/divided_data
-!ln -sf {input_dir}/proceed_data /kaggle/working/CAFA6/proceed_data
-
-assert Path("/kaggle/working/CAFA6/proceed_data/ppi_graph_global").exists()
-assert Path("/kaggle/working/CAFA6/divided_data/mf_train_dataset").exists()
-print("Data OK")
+!python /kaggle/working/CAFA6/scripts/kaggle_link_data.py
 ```
+
+Nếu lỗi, kiểm tra cấu trúc zip: `!find /kaggle/input -maxdepth 5 -name ppi_graph_global`
 
 ---
 
