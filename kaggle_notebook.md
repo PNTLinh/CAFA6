@@ -24,9 +24,11 @@ Nếu GitHub chưa cập nhật: upload/copy `model/dgl_patch.py` mới (có pat
 !python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
 ```
 
-Script tự cài **DGL CUDA** (không dùng `pip install dgl==2.1.0` CPU).
+Script tự cài **DGL CUDA** và kiểm tra `g.to('cuda')`.
 
-Phải in: `OK  DGL 2.1.0  GraphDataLoader OK  device=cuda:0`
+Kaggle mặc định **torch 2.10+cu128** — DGL 2.1 không có wheel cu128; script sẽ tự hạ **torch 2.6+cu124** + DGL cu124 (vẫn chạy T4).
+
+Phải in: `[install] DGL CUDA OK` và `OK ... device=cuda:0`
 
 **Settings:** GPU T4 bật, Internet ON.
 

@@ -19,31 +19,95 @@ def pip(*args: str) -> int:
     return subprocess.run([sys.executable, "-m", "pip", *args]).returncode
 
 
+_CUDA_PROBE = """
+import dgl, torch
+g = dgl.graph(([0, 1], [1, 2]))
+if torch.cuda.is_available():
+    g.to("cuda")
+print("cuda_ok")
+"""
+
+
+def dgl_cuda_works() -> bool:
+    """True if installed libdgl supports CUDA (pip success is not enough)."""
+    r = subprocess.run(
+        [sys.executable, "-c", _CUDA_PROBE],
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode == 0 and "cuda_ok" in (r.stdout or "")
+
+
+def _try_install_dgl_from(url: str) -> bool:
+    pip("uninstall", "-y", "dgl")
+    print(f"[install] pip install dgl==2.1.0 -f {url}")
+    if pip("install", "-q", "dgl==2.1.0", "-f", url) != 0:
+        return False
+    if dgl_cuda_works():
+        print("[install] DGL CUDA OK")
+        return True
+    print("[install] wheel installed but libdgl has no CUDA — try next URL")
+    return False
+
+
 def install_dgl_cuda() -> None:
-    """Install DGL 2.1 wheel with CUDA matching current PyTorch."""
+    """Install DGL 2.1 with CUDA. Kaggle PyTorch 2.10+cu128 has no official wheel → fallback."""
     import torch
 
     pip("uninstall", "-y", "dgl", "torchdata")
-    cuda = torch.version.cuda
-    if not cuda:
-        print("[install] No CUDA in PyTorch — installing CPU dgl (enable GPU on Kaggle!)")
+    if not torch.cuda.is_available():
+        print("[install] No CUDA in PyTorch — enable GPU T4 on Kaggle")
         pip("install", "-q", "dgl==2.1.0")
         return
 
-    cu = "cu" + cuda.replace(".", "")
     tv = ".".join(torch.__version__.split(".")[:2])
+    cuda = torch.version.cuda or ""
+    cu = "cu" + cuda.replace(".", "") if cuda else "cu124"
+
     urls = [
         f"https://data.dgl.ai/wheels/torch-{tv}/{cu}/repo.html",
         f"https://data.dgl.ai/wheels/{cu}/repo.html",
+        "https://data.dgl.ai/wheels/torch-2.6/cu124/repo.html",
+        "https://data.dgl.ai/wheels/torch-2.5/cu124/repo.html",
+        "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html",
         "https://data.dgl.ai/wheels/cu124/repo.html",
         "https://data.dgl.ai/wheels/cu121/repo.html",
     ]
+    seen: set[str] = set()
     for url in urls:
-        print(f"[install] pip install dgl==2.1.0 -f {url}")
-        if pip("install", "-q", "dgl==2.1.0", "-f", url) == 0:
+        if url in seen:
+            continue
+        seen.add(url)
+        if _try_install_dgl_from(url):
             return
-    print("[install] WARN: CUDA wheel failed, falling back to CPU dgl")
-    pip("install", "-q", "dgl==2.1.0")
+
+    # Kaggle default: torch 2.10+cu128 — DGL 2.1 has no cu128 wheel; use PyTorch 2.6+cu124 stack.
+    print(
+        "[install] No DGL CUDA wheel for "
+        f"torch {torch.__version__} cuda {cuda}. "
+        "Installing PyTorch 2.6.0+cu124 + DGL cu124 (compatible with T4)..."
+    )
+    pip(
+        "install",
+        "-q",
+        "torch==2.6.0",
+        "torchvision",
+        "--index-url",
+        "https://download.pytorch.org/whl/cu124",
+    )
+    import importlib
+
+    importlib.invalidate_caches()
+    import torch as torch_mod
+
+    print(f"[install] torch now {torch_mod.__version__} cuda {torch_mod.version.cuda}")
+
+    if _try_install_dgl_from("https://data.dgl.ai/wheels/torch-2.6/cu124/repo.html"):
+        return
+
+    raise RuntimeError(
+        "Could not install DGL with CUDA. See kaggle_notebook.md or open an issue."
+    )
 
 
 def dgl_root() -> Path:
