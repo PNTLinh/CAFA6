@@ -21,12 +21,14 @@ Nếu GitHub chưa cập nhật: upload/copy `model/dgl_patch.py` mới (có pat
 
 ```python
 !pip install -q packaging fair-esm transformers biopython tqdm
-!pip uninstall -y dgl torchdata
-!pip install -q dgl==2.1.0
 !python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
 ```
 
+Script tự cài **DGL CUDA** (không dùng `pip install dgl==2.1.0` CPU).
+
 Phải in: `OK  DGL 2.1.0  GraphDataLoader OK  device=cuda:0`
+
+**Settings:** GPU T4 bật, Internet ON.
 
 ### Cell 2 dự phòng (upload `scripts/kaggle_fix_dgl.py` nếu chưa có trên repo)
 

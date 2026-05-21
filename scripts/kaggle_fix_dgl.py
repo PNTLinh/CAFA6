@@ -1,13 +1,49 @@
 #!/usr/bin/env python3
-"""One-shot DGL 2.1 fix for Kaggle Py3.12. Run: python scripts/kaggle_fix_dgl.py"""
+"""Install DGL 2.1 (CUDA) + patch torchdata on Kaggle Py3.12.
+
+Run: python scripts/kaggle_fix_dgl.py
+Skip pip install: python scripts/kaggle_fix_dgl.py --no-install
+"""
 from __future__ import annotations
 
 import importlib
 import re
 import shutil
 import site
+import subprocess
 import sys
 from pathlib import Path
+
+
+def pip(*args: str) -> int:
+    return subprocess.run([sys.executable, "-m", "pip", *args]).returncode
+
+
+def install_dgl_cuda() -> None:
+    """Install DGL 2.1 wheel with CUDA matching current PyTorch."""
+    import torch
+
+    pip("uninstall", "-y", "dgl", "torchdata")
+    cuda = torch.version.cuda
+    if not cuda:
+        print("[install] No CUDA in PyTorch — installing CPU dgl (enable GPU on Kaggle!)")
+        pip("install", "-q", "dgl==2.1.0")
+        return
+
+    cu = "cu" + cuda.replace(".", "")
+    tv = ".".join(torch.__version__.split(".")[:2])
+    urls = [
+        f"https://data.dgl.ai/wheels/torch-{tv}/{cu}/repo.html",
+        f"https://data.dgl.ai/wheels/{cu}/repo.html",
+        "https://data.dgl.ai/wheels/cu124/repo.html",
+        "https://data.dgl.ai/wheels/cu121/repo.html",
+    ]
+    for url in urls:
+        print(f"[install] pip install dgl==2.1.0 -f {url}")
+        if pip("install", "-q", "dgl==2.1.0", "-f", url) == 0:
+            return
+    print("[install] WARN: CUDA wheel failed, falling back to CPU dgl")
+    pip("install", "-q", "dgl==2.1.0")
 
 
 def dgl_root() -> Path:
@@ -121,6 +157,9 @@ def fix_dgl_init(root: Path) -> None:
 
 
 def main() -> None:
+    if "--no-install" not in sys.argv:
+        install_dgl_cuda()
+
     root = dgl_root()
     n = 0
     for py in root.rglob("*.py"):
@@ -142,9 +181,26 @@ def main() -> None:
     import torch
 
     g = dgl.graph(([0, 1], [1, 2]))
+    device_msg = "cpu"
     if torch.cuda.is_available():
-        g = g.to("cuda")
-    print(f"OK  DGL {dgl.__version__}  GraphDataLoader OK  device={g.device}  ({n} files patched)")
+        try:
+            g = g.to("cuda")
+            device_msg = str(g.device)
+        except Exception as exc:
+            device_msg = f"cpu-only DGL build ({exc})"
+            print(
+                "[WARN] DGL imported but CUDA failed. Re-run this script without prior "
+                "'pip install dgl==2.1.0' (CPU). Enable GPU T4 on Kaggle."
+            )
+    else:
+        print("[WARN] torch.cuda.is_available() is False — turn on GPU in notebook settings.")
+
+    print(
+        f"OK  DGL {dgl.__version__}  GraphDataLoader OK  device={device_msg}  "
+        f"({n} files patched)"
+    )
+    if "cpu" in device_msg and torch.cuda.is_available():
+        sys.exit(1)
 
 
 if __name__ == "__main__":
