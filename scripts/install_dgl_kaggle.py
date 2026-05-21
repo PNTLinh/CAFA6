@@ -26,6 +26,9 @@ def try_import_cuda() -> bool:
 def main() -> None:
     import torch
 
+    # DGL 2.x graphbolt requires torchdata (missing on Kaggle by default)
+    pip("install", "-q", "torchdata")
+
     pip("uninstall", "-y", "dgl")
 
     cuda = torch.version.cuda

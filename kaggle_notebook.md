@@ -13,15 +13,15 @@ Trước khi chạy:
 > **Không dùng** `dgl==2.1.0+cu118` trên Kaggle — sẽ lỗi `libcudart.so.11.0` vì Kaggle dùng **CUDA 12**.
 
 ```python
-!pip install -q packaging fair-esm transformers biopython tqdm
+!pip install -q packaging fair-esm transformers biopython tqdm torchdata
 
 import torch
 print(f"PyTorch: {torch.__version__}, CUDA: {torch.version.cuda}, available: {torch.cuda.is_available()}")
 
-# Gỡ bản DGL CUDA 11 nếu đã cài nhầm
+# Gỡ bản DGL cũ / sai CUDA
 !pip uninstall -y dgl
 
-# Cài DGL khớp CUDA của PyTorch (12.x trên Kaggle 2025)
+# DGL 2.x + CUDA 12 (Kaggle T4 2025)
 !pip install -q dgl -f https://data.dgl.ai/wheels/torch-2.5/cu124/repo.html
 ```
 
@@ -34,10 +34,11 @@ Nếu cell trên lỗi 404, chạy script tự dò wheel (sau khi clone repo ở
 Hoặc thử lần lượt (chọn URL khớp output `torch.version.cuda`):
 
 ```python
+!pip install -q torchdata
 import torch
 cu = "cu" + torch.version.cuda.replace(".", "")  # ví dụ cu124
 !pip uninstall -y dgl
-!pip install -q dgl -f https://data.dgl.ai/wheels/{cu}/repo.html
+!pip install -q dgl -f https://data.dgl.ai/wheels/torch-{torch.__version__.split('.')[0]}.{torch.__version__.split('.')[1]}/{cu}/repo.html
 ```
 
 **Kiểm tra:**

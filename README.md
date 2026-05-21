@@ -806,7 +806,8 @@ Upload lên [Kaggle Datasets](https://www.kaggle.com/datasets) → **New Dataset
 
 **Cell 1 — Cài dependency + kiểm tra GPU**
 ```python
-# Kaggle: KHÔNG dùng cu118 (lỗi libcudart.so.11.0). Khớp CUDA 12:
+# Kaggle: cần torchdata + DGL CUDA 12 (KHÔNG dùng cu118):
+!pip install -q torchdata
 !pip uninstall -y dgl
 !pip install -q dgl -f https://data.dgl.ai/wheels/torch-2.5/cu124/repo.html
 # hoặc: !python scripts/install_dgl_kaggle.py
