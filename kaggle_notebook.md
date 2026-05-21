@@ -1,100 +1,75 @@
 # Kaggle Notebook — CAFA6 (GPU T4)
 
-**Settings:** GPU T4 x1 · Internet ON · Add Data → `cafa6-data`
-
-> Lỗi `torchdata.datapipes` / `libcudart.so.11.0` xảy ra vì:
-> 1. Cài nhầm `dgl+cu118` (cần CUDA 12)
-> 2. Shim trong notebook **không** áp dụng cho `python train_Struct2GO2.py` (process riêng) — code repo đã fix trong `model/dgl_compat.py`
+**Settings:** GPU T4 x1 · Internet ON · Add Data → dataset từ `pack_for_kaggle.py`
 
 ---
 
-## Cell 1 — Clone repo (chạy đầu tiên)
+## Bước 0 — Restart session
+
+Nếu từng chạy `torchdata==0.7.1` hoặc cell shim cũ: **Session → Restart session** (bắt buộc).
+
+---
+
+## Cell 1 — Clone repo
 
 ```python
 %cd /kaggle/working
 !rm -rf CAFA6
 !git clone https://github.com/PNTLinh/CAFA6.git
 %cd CAFA6
-!git pull
-!ls scripts/
 ```
+
+Nếu GitHub chưa có bản mới, copy thư mục `model/dgl_patch.py` từ máy local vào `/kaggle/working/CAFA6/model/`.
 
 ---
 
-## Cell 2 — Cài DGL + kiểm tra GPU
+## Cell 2 — Cài + sửa DGL (quan trọng)
 
 ```python
 !pip install -q packaging fair-esm transformers biopython tqdm
-!python /kaggle/working/CAFA6/scripts/dgl_kaggle_bootstrap.py
+!pip uninstall -y dgl torchdata
+!pip install -q dgl==2.1.0
+!python /kaggle/working/CAFA6/model/dgl_patch.py
 ```
 
-Phải in ra dòng `OK  DGL ... device=cuda:0`. Nếu vẫn lỗi `dgl/distributed` / `IterDataPipe`:
+Phải in: `[dgl_patch] ... graphbolt/base.py` và `OK DGL 2.1.0`.
 
-1. **Restart session** (bắt buộc nếu từng cài `torchdata==0.7.1`)
-2. Chạy lại Cell 1 → Cell 2
-3. Test nhanh: `from model.dgl_compat import apply_dgl_compat; apply_dgl_compat(); import dgl`
+**Không** cài `torchdata==0.7.1`. **Không** chạy cell shim cũ trong notebook.
 
 ---
 
-## Cell 3 — Symlink dataset
+## Cell 3 — Link data
 
 ```python
 !python /kaggle/working/CAFA6/scripts/kaggle_link_data.py
 ```
 
-Nếu lỗi, kiểm tra cấu trúc zip: `!find /kaggle/input -maxdepth 5 -name ppi_graph_global`
+Nếu lỗi: `!find /kaggle/input -name ppi_graph_global`
 
 ---
 
-## Cell 4 — Train MF (`--kaggle`)
+## Cell 4 — Train
 
 ```python
 import os
 os.environ["DGL_CUDA"] = "1"
 os.environ["DATA_DIR"] = "/kaggle/working/CAFA6"
-
 !cd /kaggle/working/CAFA6 && python train_Struct2GO2.py -branch mf --kaggle
 ```
 
-Train script tự gọi `model/dgl_compat.py` — **không cần** import dgl trong notebook trước đó.
+`train_Struct2GO2.py` tự gọi `ensure_dgl_importable()` — train chạy subprocess riêng, không dùng shim trong notebook.
 
 ---
 
-## Cell 5 — Train CC / BP (tùy chọn)
+## Cell dự phòng (nếu Cell 2 vẫn lỗi)
+
+Chạy **trong notebook** (cùng kernel):
 
 ```python
-!cd /kaggle/working/CAFA6 && DGL_CUDA=1 DATA_DIR=/kaggle/working/CAFA6 \
-    python train_Struct2GO2.py -branch cc --kaggle
-
-!cd /kaggle/working/CAFA6 && DGL_CUDA=1 DATA_DIR=/kaggle/working/CAFA6 \
-    python train_Struct2GO2.py -branch bp --kaggle -dropout 0.1
+import sys, site, shutil
+from pathlib import Path
+sys.path.insert(0, "/kaggle/working/CAFA6")
+from model.dgl_patch import patch_dgl_on_disk, ensure_dgl_importable
+print("patched files:", patch_dgl_on_disk())
+ensure_dgl_importable()
 ```
-
----
-
-## Cell 6 — Lưu output
-
-```python
-!cp -r /kaggle/working/CAFA6/save_models /kaggle/working/
-!cp -r /kaggle/working/CAFA6/log /kaggle/working/
-!ls /kaggle/working/save_models/
-```
-
----
-
-## OOM trên T4
-
-```python
-!cd /kaggle/working/CAFA6 && python train_Struct2GO2.py -branch mf --kaggle -batch_size 64
-```
-
----
-
-## Checklist nhanh
-
-| Bước | Đúng? |
-|---|---|
-| Clone repo **trước** khi chạy bootstrap | Cell 1 |
-| `dgl_kaggle_bootstrap.py` in `OK ... cuda:0` | Cell 2 |
-| Symlink thấy `ppi_graph_global` | Cell 3 |
-| `git pull` có `model/dgl_compat.py` | Cell 1 |

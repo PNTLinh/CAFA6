@@ -4,10 +4,10 @@ import os
 import pickle
 import warnings
 
-# Phải chạy trước import dgl (subprocess train không dùng shim từ notebook)
-from model.dgl_compat import apply_dgl_compat
+# Patch DGL on disk before import (Kaggle Py3.12 / torchdata break)
+from model.dgl_patch import ensure_dgl_importable
 
-apply_dgl_compat()
+ensure_dgl_importable(verbose=False)
 
 import dgl
 import numpy as np

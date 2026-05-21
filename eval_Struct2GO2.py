@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import argparse
 import numpy as np
 
-from model.dgl_compat import apply_dgl_compat
+from model.dgl_patch import ensure_dgl_importable
 
-apply_dgl_compat()
+ensure_dgl_importable(verbose=False)
 
 import dgl
 from dgl.dataloading import GraphDataLoader
