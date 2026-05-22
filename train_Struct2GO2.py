@@ -209,8 +209,8 @@ def main():
 
         ppi_node_emb = None
         if args.cache_ppi:
-            with torch.cuda.amp.autocast(enabled=use_cuda and args.amp):
-                ppi_node_emb = model.encode_ppi_nodes(ppi_graph)
+            with torch.no_grad(), torch.cuda.amp.autocast(enabled=use_cuda and args.amp):
+                ppi_node_emb = model.encode_ppi_nodes(ppi_graph).detach()
 
         train_loss = 0.0
         for i, (_, graphs, labels, seq_feats, ppi_node_ids) in enumerate(
@@ -258,7 +258,7 @@ def main():
 
         if args.cache_ppi:
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=use_cuda and args.amp):
-                ppi_node_emb = model.encode_ppi_nodes(ppi_graph)
+                ppi_node_emb = model.encode_ppi_nodes(ppi_graph).detach()
 
         with torch.no_grad():
             for i, (_, graphs, labels, seq_feats, ppi_node_ids) in enumerate(
