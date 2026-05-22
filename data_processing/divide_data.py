@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 class MyDataSet(Dataset):
+    __module__ = "data_processing.divide_data"
+
     def __init__(self, emb_graph, emb_seq_feature, emb_label, emb_ppi_node_id=None):
         super().__init__()
         self.list = list(emb_graph.keys())

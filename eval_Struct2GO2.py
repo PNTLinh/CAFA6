@@ -42,6 +42,18 @@ def create_logger(branch_name):
 
 warnings.filterwarnings('ignore')
 
+
+class _CompatUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if name == 'MyDataSet' and module in {'__main__', 'data_processing.divide_data'}:
+            return MyDataSet
+        return super().find_class(module, name)
+
+
+def _load_pickle(path):
+    with open(path, 'rb') as handle:
+        return _CompatUnpickler(handle).load()
+
 # TODO 个人认为，测试集不用再枚举thresh了，直接使用验证集得出的最优thresh即可
 Thresholds = [x/100 for x in range(1,100)]
 
@@ -64,15 +76,15 @@ if __name__ == "__main__":
     model_path = args.model_path or f'save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl'
     
     logger = create_logger(args.branch)
-    
-    with open(test_data_path,'rb') as f:
-        test_dataset = pickle.load(f)
-    with open(label_network_path,'rb') as f:
-        label_network = pickle.load(f)
+
+    import __main__
+    __main__.MyDataSet = MyDataSet
+
+    test_dataset = _load_pickle(test_data_path)
+    label_network = _load_pickle(label_network_path)
     with open(term2idx_path,'r') as f:
         idx2term = json.load(f)
-    with open(ppi_graph_path, 'rb') as f:
-        ppi_graph = pickle.load(f)
+    ppi_graph = _load_pickle(ppi_graph_path)
     label_network = label_network.to(device)
     model = torch.load(model_path, map_location=device)
     model = model.to(device)

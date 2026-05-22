@@ -3,6 +3,7 @@ import logging
 import os
 import pickle
 import warnings
+from typing import Any
 
 # Patch DGL on disk before import (Kaggle Py3.12 / torchdata break)
 from model.dgl_patch import ensure_dgl_importable
@@ -19,10 +20,30 @@ from sklearn.metrics import auc, roc_curve
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
+from data_processing.divide_data import MyDataSet
 from model.evaluation import cacul_aupr, calculate_performance
 from model.network import SAGNetworkHierarchical
 
 warnings.filterwarnings("ignore")
+
+
+def _register_pickle_classes() -> None:
+    """Pickle from `python divide_data.py` references __main__.MyDataSet."""
+    import __main__
+
+    __main__.MyDataSet = MyDataSet
+
+
+class _CompatUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if name == "MyDataSet" and module in {"__main__", "data_processing.divide_data"}:
+            return MyDataSet
+        return super().find_class(module, name)
+
+
+def _load_pickle(path: str):
+    with open(path, "rb") as handle:
+        return _CompatUnpickler(handle).load()
 Thresholds = [x / 100 for x in range(1, 100)]
 
 
@@ -117,16 +138,13 @@ def main():
     logger = create_logger(args.branch)
     logger.info(f"device={device}, amp={args.amp}, cache_ppi={args.cache_ppi}, kaggle={args.kaggle}")
 
-    with open(train_data_path, "rb") as f:
-        train_dataset = pickle.load(f)
-    with open(valid_data_path, "rb") as f:
-        valid_dataset = pickle.load(f)
-    with open(label_network_path, "rb") as f:
-        label_network = pickle.load(f)
+    _register_pickle_classes()
+    train_dataset = _load_pickle(train_data_path)
+    valid_dataset = _load_pickle(valid_data_path)
+    label_network = _load_pickle(label_network_path)
     label_network = label_network.to(device)
 
-    with open(ppi_graph_path, "rb") as f:
-        ppi_graph = pickle.load(f)
+    ppi_graph = _load_pickle(ppi_graph_path)
     ppi_graph = ppi_graph.to(device)
 
     sample_label = train_dataset[0][2]
