@@ -48,14 +48,24 @@ def _load_pickle(path: str):
 Thresholds = [x / 100 for x in range(1, 100)]
 
 
-def create_logger(branch_name: str) -> logging.Logger:
-    os.makedirs("log", exist_ok=True)
-    os.makedirs("save_models", exist_ok=True)
+def _ckpt_path(data_dir: str, args: argparse.Namespace, tag: str) -> str:
+    os.makedirs(os.path.join(data_dir, "save_models"), exist_ok=True)
+    return os.path.join(
+        data_dir,
+        "save_models",
+        f"{tag}_{args.branch}_{args.batch_size}_{args.learningrate}_{args.dropout}.pkl",
+    )
+
+
+def create_logger(branch_name: str, data_dir: str) -> logging.Logger:
+    log_dir = os.path.join(data_dir, "log")
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(os.path.join(data_dir, "save_models"), exist_ok=True)
     logger = logging.getLogger(branch_name)
     if logger.handlers:
         return logger
     handler1 = logging.StreamHandler()
-    handler2 = logging.FileHandler(filename=os.path.join("log", branch_name + ".log"))
+    handler2 = logging.FileHandler(filename=os.path.join(log_dir, f"{branch_name}.log"))
     logger.setLevel(logging.DEBUG)
     handler1.setLevel(logging.ERROR)
     handler2.setLevel(logging.DEBUG)
@@ -89,6 +99,8 @@ def apply_kaggle_preset(args: argparse.Namespace) -> None:
     args.amp = True
     args.cache_ppi = True
     args.validate_every = 2
+    global Thresholds
+    Thresholds = [x / 100 for x in range(5, 100, 5)]  # 19 thresholds (faster than 99 on Kaggle)
 
 
 def labels_to_device(labels: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -139,8 +151,9 @@ def main():
     label_network_path = f"{data_dir}/proceed_data/label_{args.branch}_network"
     ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
 
-    logger = create_logger(args.branch)
+    logger = create_logger(args.branch, data_dir)
     logger.info(f"device={device}, amp={args.amp}, cache_ppi={args.cache_ppi}, kaggle={args.kaggle}")
+    logger.info(f"data_dir={data_dir}, cwd={os.getcwd()}")
 
     _register_pickle_classes()
     train_dataset = _load_pickle(train_data_path)
@@ -288,7 +301,10 @@ def main():
                 valid_loss += loss.item()
                 pred += probs.tolist()
                 actual += labels.tolist()
+                if i == 0 or (i + 1) % 10 == 0:
+                    logger.info(f"valid batch {i + 1}/{len(valid_dataloader)}")
 
+        logger.info("valid forward done, computing metrics...")
         fpr, tpr, _ = roc_curve(np.array(actual).flatten(), np.array(pred).flatten(), pos_label=1)
         auc_score = auc(fpr, tpr)
         aupr = cacul_aupr(np.array(actual).flatten(), np.array(pred).flatten())
@@ -310,33 +326,32 @@ def main():
             best_scores = each_best_scores
             best_score_dict = score_dict
             best_aupr = aupr
-            ckpt = (
-                f"save_models/bestmodel_{args.branch}_{args.batch_size}_"
-                f"{args.learningrate}_{args.dropout}.pkl"
-            )
+            ckpt = _ckpt_path(data_dir, args, "bestmodel")
             torch.save(model, ckpt)
+            print(f"SAVED {ckpt}", flush=True)
             logger.info(f"saved checkpoint: {ckpt}")
 
-        thresh, f_score, recall = each_best_scores[0], each_best_scores[1], each_best_scores[2]
-        precision, auc_score = each_best_scores[3], each_best_scores[4]
-        logger.info("########valid metric###########")
-        logger.info(
-            f"epoch={epoch}, train_loss={train_loss / len(train_dataloader):.4f}, "
-            f"valid_loss={valid_loss / len(valid_dataloader):.4f}"
-        )
-        logger.info(
-            f"threshold={thresh}, f_score={f_score}, auc={auc_score}, "
-            f"recall={recall}, precision={precision}, aupr={aupr}"
-        )
+        if each_best_scores:
+            thresh, f_score, recall = each_best_scores[0], each_best_scores[1], each_best_scores[2]
+            precision, auc_score = each_best_scores[3], each_best_scores[4]
+            logger.info("########valid metric###########")
+            logger.info(
+                f"epoch={epoch}, train_loss={train_loss / len(train_dataloader):.4f}, "
+                f"valid_loss={valid_loss / max(len(valid_dataloader), 1):.4f}"
+            )
+            logger.info(
+                f"threshold={thresh}, f_score={f_score}, auc={auc_score}, "
+                f"recall={recall}, precision={precision}, aupr={aupr}"
+            )
+        else:
+            logger.warning(f"epoch={epoch}: no valid F-score (empty pred/actual?)")
 
     logger.info("best_fscore: " + str(best_fscore))
     logger.info("best_scores[thresh,fmax,recall,precision,auc]: " + str(best_scores))
 
-    final_ckpt = (
-        f"save_models/final_{args.branch}_{args.batch_size}_"
-        f"{args.learningrate}_{args.dropout}.pkl"
-    )
+    final_ckpt = _ckpt_path(data_dir, args, "final")
     torch.save(model, final_ckpt)
+    print(f"SAVED {final_ckpt}", flush=True)
     logger.info(f"saved final model: {final_ckpt}")
     logger.info("best_aupr: " + str(best_aupr))
     logger.info("best_score_dict: " + str(best_score_dict))

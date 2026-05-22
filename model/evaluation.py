@@ -19,9 +19,7 @@ def update_parent_features(label_network:dgl.DGLGraph, labels):
 
 def cacul_aupr(lables, pred):
     precision, recall, _thresholds = metrics.precision_recall_curve(lables, pred)
-    
-    aupr += metrics.auc(recall, precision)
-    return aupr
+    return metrics.auc(recall, precision)
 
 def calculate_performance(actual, pred_prob, label_network:dgl.DGLGraph, threshold=0.2, average='micro'):
     pred_lable = []
