@@ -38,43 +38,71 @@ def dgl_cuda_works() -> bool:
     return r.returncode == 0 and "cuda_ok" in (r.stdout or "")
 
 
-def _try_install_dgl_from(url: str, *, force: bool = False) -> bool:
-    pip("uninstall", "-y", "dgl")
-    print(f"[install] pip install dgl==2.1.0 -f {url}")
-    args = ["install", "-q", "dgl==2.1.0", "-f", url]
-    if force:
-        args = ["install", "-q", "--force-reinstall", "dgl==2.1.0", "-f", url]
-    if pip(*args) != 0:
-        return False
+def _torch_version() -> str:
+    import importlib
+
+    importlib.invalidate_caches()
+    import torch
+
+    return torch.__version__
+
+
+_DGL_RUNTIME_DEPS = ("numpy", "scipy", "networkx", "requests", "psutil", "tqdm")
+
+
+def _install_dgl_runtime_deps() -> None:
+    pip("install", "-q", *_DGL_RUNTIME_DEPS)
+
+
+def _try_install_dgl_from(url: str, *specs: str, force: bool = False) -> bool:
+    """Install CUDA DGL wheel with --no-deps so pip does not upgrade torch to 2.12."""
     if dgl_cuda_works():
-        print("[install] DGL CUDA OK")
+        print("[install] DGL CUDA already OK")
         return True
-    print("[install] wheel installed but libdgl has no CUDA — try next URL")
+
+    if not specs:
+        specs = ("2.1.0+cu121", "2.1.0+cu124", "2.1.0")
+
+    torch_before = _torch_version()
+    for spec in specs:
+        pip("uninstall", "-y", "dgl")
+        print(f"[install] pip install dgl=={spec} --no-deps -f {url}")
+        args = ["install", "-q", "--no-deps", f"dgl=={spec}", "-f", url]
+        if force:
+            args.insert(2, "--force-reinstall")
+        if pip(*args) != 0:
+            continue
+        _install_dgl_runtime_deps()
+        torch_after = _torch_version()
+        if torch_after != torch_before:
+            print(f"[install] WARN pip changed torch {torch_before} -> {torch_after}")
+        if dgl_cuda_works():
+            print(f"[install] DGL CUDA OK  (dgl=={spec})")
+            return True
+        print(f"[install] dgl=={spec} from {url} — no CUDA with torch {torch_after}")
     return False
 
 
 def _install_pytorch_26_cu124() -> None:
-    """Align torch/torchaudio/torchvision — pip cannot downgrade torch alone on Kaggle."""
-    print("[install] PyTorch 2.6.0+cu124 stack (torchaudio 2.10 blocks torch-only downgrade)")
+    """Align torch/torchaudio/torchvision (Kaggle torchaudio 2.10 pins torch 2.10)."""
+    print("[install] PyTorch 2.6.0+cu124 stack")
     pip("uninstall", "-y", "torch", "torchaudio", "torchvision")
     pip(
         "install",
         "-q",
+        "--force-reinstall",
         "torch==2.6.0",
         "torchvision==0.21.0",
         "torchaudio==2.6.0",
         "--index-url",
         "https://download.pytorch.org/whl/cu124",
     )
-    import importlib
-
-    importlib.invalidate_caches()
-    import torch as torch_mod
-
-    ver = torch_mod.__version__
-    print(f"[install] torch now {ver} cuda {torch_mod.version.cuda}")
+    ver = _torch_version()
+    print(f"[install] torch now {ver}")
     if not ver.startswith("2.6"):
-        raise RuntimeError(f"torch downgrade failed (still {ver}); restart session and rerun.")
+        raise RuntimeError(
+            f"torch is {ver}, expected 2.6.x. Restart Kaggle session and rerun (pip pulled torch 2.12)."
+        )
 
 
 def install_dgl_cuda() -> None:
@@ -115,7 +143,7 @@ def install_dgl_cuda() -> None:
         if url in seen:
             continue
         seen.add(url)
-        if _try_install_dgl_from(url):
+        if _try_install_dgl_from(url, "2.1.0+cu121", "2.1.0+cu124", "2.1.0"):
             return
 
     print(
@@ -123,13 +151,22 @@ def install_dgl_cuda() -> None:
         "Switching to PyTorch 2.6.0+cu124 + DGL cu124..."
     )
     _install_pytorch_26_cu124()
-    for url in (
+    # Preferred stack (matches kaggle_notebook.md): torch 2.6 + cu124 + dgl cu124 wheel
+    if _try_install_dgl_from(
         "https://data.dgl.ai/wheels/torch-2.6/cu124/repo.html",
+        "2.1.0",
+        "2.1.0+cu124",
+        force=True,
+    ):
+        return
+    for url in (
         "https://data.dgl.ai/wheels/cu124/repo.html",
         "https://data.dgl.ai/wheels/cu121/repo.html",
     ):
-        if _try_install_dgl_from(url, force=True):
+        if _try_install_dgl_from(url, "2.1.0+cu124", "2.1.0+cu121", "2.1.0", force=True):
             return
+    if not _torch_version().startswith("2.6"):
+        raise RuntimeError(f"torch became {_torch_version()} after DGL install")
 
     raise RuntimeError(
         "Could not install DGL with CUDA. Restart session, then rerun this script."

@@ -1,10 +1,14 @@
 # Kaggle — CAFA6
 
-**Restart session** nếu từng chạy shim `torchdata` cũ.
+Notebook này dành cho **Kaggle T4** và ưu tiên dùng script có sẵn trong repo để tránh lỗi thư viện `torchdata`/`dgl`.
 
----
+## Trước khi chạy
 
-## Cell 1 — Clone
+- Bật **GPU T4** trong Kaggle Notebook.
+- Bật **Internet**.
+- Nếu trước đó bạn đã thử cài `torchdata` hoặc `dgl` thủ công, hãy **Restart session** trước khi chạy lại notebook này.
+
+## Cell 1 — Clone repo
 
 ```python
 %cd /kaggle/working
@@ -13,100 +17,59 @@
 %cd CAFA6
 ```
 
-Nếu GitHub chưa cập nhật: upload/copy `model/dgl_patch.py` mới (có patch `graphbolt/__init__.py`).
-
----
-
-## Cell 2 — DGL (copy nguyên khối)
+## Cell 2 — Cài dependencies và DGL
 
 ```python
-!pip install -q packaging fair-esm transformers biopython tqdm
-!python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
+!pip install -q packaging fair-esm transformers biopython tqdm scikit-learn pandas scipy networkx requests psutil
+!python /kaggle/working/CAFA6/scripts/install_dgl_kaggle.py
 ```
 
-Script tự cài **DGL CUDA** và kiểm tra `g.to('cuda')`.
+Nếu cell này báo lỗi hoặc torch/dgl bị đổi phiên bản ngoài ý muốn, restart session rồi chạy lại từ đầu.
 
-Kaggle mặc định **torch 2.10+cu128** — DGL 2.1 không có wheel cu128; script sẽ tự hạ **torch 2.6+cu124** + DGL cu124 (vẫn chạy T4).
-
-Phải in: `[install] DGL CUDA OK` và `OK ... device=cuda:0`
-
-**Settings:** GPU T4 bật, Internet ON.
-
-### Cell 2 dự phòng (upload `scripts/kaggle_fix_dgl.py` nếu chưa có trên repo)
-
-Chỉ dùng nếu không có `kaggle_fix_dgl.py` — tốt nhất copy file script từ repo.
+## Cell 3 — Kiểm tra CUDA + DGL
 
 ```python
-!pip uninstall -y dgl torchdata
-!pip install -q dgl==2.1.0
-!python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
-```
-
-<details><summary>Cell patch thủ công (cũ)</summary>
-
-```python
-!pip uninstall -y dgl torchdata
-!pip install -q dgl==2.1.0
-import importlib, site, shutil, sys
-from pathlib import Path
-
-REPL = [
-    ("from torchdata.datapipes.iter import IterableWrapper, IterDataPipe",
-     "from torch.utils.data import IterDataPipe\nfrom torch.utils.data.datapipes.iter import IterableWrapper"),
-    ("from torchdata.datapipes.iter import IterDataPipe", "from torch.utils.data import IterDataPipe"),
-    ("import torchdata.datapipes as dp", "import torch.utils.data.datapipes as dp"),
-    ("import torchdata.dataloader2.graph as dp_utils", "dp_utils = None  # patched"),
-    ("from torch.utils.data import functional_datapipe",
-     "def functional_datapipe(name):\n    def _d(c): return c\n    return _d"),
-    ("from .dataloader import *", "from .dataloader import GraphDataLoader  # patched"),
-    ("from .dist_dataloader import *", "# from .dist_dataloader import *  # patched"),
-    ("from ..distributed import DistGraph",
-     "try:\n    from ..distributed import DistGraph\nexcept Exception:\n    class DistGraph: pass"),
-]
-for k in list(sys.modules):
-    if k == "dgl" or k.startswith("dgl.") or k == "torchdata" or k.startswith("torchdata."):
-        del sys.modules[k]
-
-for sp in site.getsitepackages():
-    root = Path(sp) / "dgl"
-    if not (root / "graphbolt").is_dir():
-        continue
-    for py in root.rglob("*.py"):
-        t = py.read_text()
-        n = t
-        for a, b in REPL:
-            n = n.replace(a, b)
-        if n != t:
-            py.write_text(n)
-            shutil.rmtree(py.parent / "__pycache__", ignore_errors=True)
-            print("patched", py.relative_to(root))
-    break
-
-dgl = importlib.import_module("dgl")
 import torch
-g = dgl.graph(([0,1],[1,2]))
+from model.dgl_patch import ensure_dgl_importable
+
+ensure_dgl_importable(verbose=False)
+
+import dgl
+
+g = dgl.graph(([0, 1], [1, 2]))
 if torch.cuda.is_available():
     g = g.to("cuda")
-print("OK", dgl.__version__, g.device)
+print("OK", torch.__version__, dgl.__version__, g.device)
 ```
 
-</details>
+Phải thấy thiết bị dạng `cuda:0`.
 
----
+## Cell 4 — Nối dữ liệu Kaggle
 
-## Cell 3 — Data
+Upload dataset đã pack bằng `pack_for_kaggle.py`, sau đó chạy:
 
 ```python
 !python /kaggle/working/CAFA6/scripts/kaggle_link_data.py
 ```
 
----
+Script này sẽ tự tìm `proceed_data/ppi_graph_global` và `divided_data/*` trong `/kaggle/input` rồi symlink vào `/kaggle/working/CAFA6`.
 
-## Cell 4 — Train
+## Cell 5 — Train
 
 ```python
-import os
-os.environ["DGL_CUDA"] = "1"
-os.environ["DATA_DIR"] = "/kaggle/working/CAFA6"
-!cd /kaggle/working/CAFA6 && python train_Struct2GO2.py -branch mf --kaggle
+%env DATA_DIR=/kaggle/working/CAFA6
+%env DGL_CUDA=1
+!python /kaggle/working/CAFA6/train_Struct2GO2.py -branch mf --kaggle
 ```
+
+Nếu T4 hết VRAM, giảm batch size:
+
+```python
+!python /kaggle/working/CAFA6/train_Struct2GO2.py -branch mf --kaggle -batch_size 64
+```
+
+## Ghi chú nhanh
+
+- Preset `--kaggle` đã bật `amp`, cache PPI và cấu hình phù hợp T4.
+- Không cần sửa path trong code; chỉ cần đặt `DATA_DIR=/kaggle/working/CAFA6`.
+- Nếu bạn muốn chạy từ đầu bằng notebook Kaggle khác, thứ tự an toàn là: clone -> install_dgl_kaggle.py -> verify -> kaggle_link_data.py -> train.
