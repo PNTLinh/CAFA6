@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -24,12 +25,19 @@ def main() -> None:
     data_root = find_cafa6_data_root(Path("/kaggle/input"))
     print("Data root:", data_root)
 
+    def clear_path(path: Path) -> None:
+        if not path.exists() and not path.is_symlink():
+            return
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+            return
+        shutil.rmtree(path)
+
     for name in ("divided_data", "proceed_data"):
         src = data_root / name
         dst = work / name
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.exists() or dst.is_symlink():
-            dst.unlink()
+        clear_path(dst)
         dst.symlink_to(src, target_is_directory=True)
         print(f"  {dst} -> {src}")
 
