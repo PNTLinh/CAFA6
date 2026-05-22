@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import pickle
+import sys
 import warnings
 from typing import Any
 
@@ -122,7 +123,10 @@ def main():
     args = parser.parse_args()
 
     if args.kaggle:
+        user_batch = args.batch_size
         apply_kaggle_preset(args)
+        if any(a in ("-batch_size", "--batch_size") for a in sys.argv):
+            args.batch_size = user_batch
 
     device = resolve_device(force_cpu=args.cpu)
     use_cuda = device.type == "cuda"
@@ -327,6 +331,13 @@ def main():
 
     logger.info("best_fscore: " + str(best_fscore))
     logger.info("best_scores[thresh,fmax,recall,precision,auc]: " + str(best_scores))
+
+    final_ckpt = (
+        f"save_models/final_{args.branch}_{args.batch_size}_"
+        f"{args.learningrate}_{args.dropout}.pkl"
+    )
+    torch.save(model, final_ckpt)
+    logger.info(f"saved final model: {final_ckpt}")
     logger.info("best_aupr: " + str(best_aupr))
     logger.info("best_score_dict: " + str(best_score_dict))
 
