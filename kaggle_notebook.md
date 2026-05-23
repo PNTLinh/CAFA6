@@ -79,6 +79,47 @@ for rel_path in [
 
 Nếu `cc_test_dataset` và `cc_valid_dataset` đều `False`, dữ liệu Kaggle chưa đủ để eval branch `cc`; cần re-run `kaggle_link_data.py` hoặc pack lại dataset.
 
+## Cell 4.6 — Sửa lại `eval_Struct2GO2.py` nếu notebook đang dùng bản cũ
+
+Chạy cell này nếu bạn thấy traceback vẫn trỏ tới `D:/CAFA6` hoặc line 248 cũ sau khi clone repo vào Kaggle.
+
+```python
+from pathlib import Path
+
+eval_path = Path("/kaggle/working/CAFA6/eval_Struct2GO2.py")
+text = eval_path.read_text(encoding="utf-8")
+old = '    data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")\n'
+new = '    data_dir = _resolve_data_dir()\n'
+
+if old in text and new not in text:
+    text = text.replace(old, new)
+    if 'def _resolve_data_dir() -> str:' not in text:
+        anchor = '_ACS_FILES = {\n    "mf": "human_MF_ACS.json",\n    "cc": "human_CC_ACS.json",\n    "bp": "human_BP_ACS.json",\n}\n\n'
+        insert = anchor + '''
+def _resolve_data_dir() -> str:
+    """Pick the first usable CAFA6 data root for local or Kaggle runs."""
+    candidates = []
+    env_data_dir = os.environ.get("DATA_DIR")
+    if env_data_dir:
+        candidates.append(Path(env_data_dir))
+    candidates.append(Path(__file__).resolve().parent)
+    candidates.append(Path.cwd())
+    candidates.append(Path("D:/CAFA6"))
+
+    for candidate in candidates:
+        if (candidate / "divided_data").exists() and (candidate / "proceed_data").exists():
+            return str(candidate)
+
+    return env_data_dir or str(Path(__file__).resolve().parent)
+
+'''
+        text = text.replace(anchor, insert, 1)
+    eval_path.write_text(text, encoding="utf-8")
+    print("patched stale eval_Struct2GO2.py")
+else:
+    print("eval_Struct2GO2.py already current")
+```
+
 ---
 
 ## Cell 5 — Train CC → MF → BP, lưu từng nhánh, cập nhật zip
