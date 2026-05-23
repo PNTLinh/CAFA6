@@ -24,7 +24,7 @@ from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
 from data_processing.divide_data import MyDataSet
-from model.evaluation import cacul_aupr, calculate_performance
+from model.evaluation import cacul_aupr, calculate_performance, roc_auc_flat
 from model.network import SAGNetworkHierarchical
 
 warnings.filterwarnings("ignore")
@@ -337,7 +337,14 @@ def main():
 
     sample_label = train_dataset[0][2]
     detected_labels = int(np.asarray(sample_label).reshape(-1).shape[0])
-    if detected_labels != args.labels_num:
+    network_labels = int(label_network.num_nodes())
+    if detected_labels != network_labels:
+        print(
+            f"[INFO] label dim in dataset={detected_labels}, label_network nodes={network_labels}; "
+            f"using labels_num={network_labels} (truncate/pad in collate)"
+        )
+        labels_num = network_labels
+    elif detected_labels != args.labels_num:
         print(f"[INFO] Auto-detected labels_num = {detected_labels} (override CLI {args.labels_num})")
         labels_num = detected_labels
     else:
@@ -483,9 +490,8 @@ def main():
                     logger.info(f"valid batch {i + 1}/{len(valid_dataloader)}")
 
         logger.info("valid forward done, computing metrics...")
-        fpr, tpr, _ = roc_curve(np.array(actual).flatten(), np.array(pred).flatten(), pos_label=1)
-        auc_score = auc(fpr, tpr)
-        aupr = cacul_aupr(np.array(actual).flatten(), np.array(pred).flatten())
+        auc_score = roc_auc_flat(actual, pred)
+        aupr = cacul_aupr(actual, pred)
 
         each_best_fcore = 0.0
         each_best_scores = []

@@ -18,8 +18,27 @@ def update_parent_features(label_network:dgl.DGLGraph, labels):
     return labels
 
 def cacul_aupr(lables, pred):
-    precision, recall, _thresholds = metrics.precision_recall_curve(lables, pred)
+    labels = np.asarray(lables).reshape(-1)
+    scores = np.asarray(pred).reshape(-1)
+    if labels.size > 500_000:
+        rng = np.random.default_rng(42)
+        idx = rng.choice(labels.size, 500_000, replace=False)
+        labels = labels[idx]
+        scores = scores[idx]
+    precision, recall, _thresholds = metrics.precision_recall_curve(labels, scores)
     return metrics.auc(recall, precision)
+
+
+def roc_auc_flat(actual, pred, max_n: int = 500_000) -> float:
+    y = np.asarray(actual).reshape(-1)
+    p = np.asarray(pred).reshape(-1)
+    if y.size > max_n:
+        rng = np.random.default_rng(42)
+        idx = rng.choice(y.size, max_n, replace=False)
+        y = y[idx]
+        p = p[idx]
+    fpr, tpr, _ = roc_curve(y, p, pos_label=1)
+    return float(auc(fpr, tpr))
 
 def calculate_performance(actual, pred_prob, label_network:dgl.DGLGraph, threshold=0.2, average='micro'):
     pred_lable = []
