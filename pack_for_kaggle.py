@@ -31,40 +31,34 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 DIVIDED_DIR = BASE_DIR / "divided_data"
 PROC_DIR    = BASE_DIR / "proceed_data"
-OUT_ZIP     = BASE_DIR / "kaggle_data.zip"
 
-# Files cần thiết để train
-REQUIRED_FILES = []
-OPTIONAL_FILES = []
 
-for branch in ("mf", "bp", "cc"):
-    train_path = DIVIDED_DIR / f"{branch}_train_dataset"
-    valid_path = DIVIDED_DIR / f"{branch}_valid_dataset"
-    test_path = DIVIDED_DIR / f"{branch}_test_dataset"
-    label_path = PROC_DIR / f"label_{branch}_network"
-    vocab_path = PROC_DIR / f"label_vocab_{branch}.json"
-    if train_path.exists() and valid_path.exists():
-        REQUIRED_FILES.extend([train_path, valid_path])
-        if test_path.exists():
-            REQUIRED_FILES.append(test_path)
+def collect_files(branches: tuple[str, ...], splits: tuple[str, ...]) -> list[Path]:
+    files: list[Path] = []
+    for branch in branches:
+        label_path = PROC_DIR / f"label_{branch}_network"
+        vocab_path = PROC_DIR / f"label_vocab_{branch}.json"
+        for split in splits:
+            path = DIVIDED_DIR / f"{branch}_{split}_dataset"
+            if path.exists():
+                files.append(path)
+            else:
+                print(f"[WARN] Thiếu {path}")
         if label_path.exists():
-            REQUIRED_FILES.append(label_path)
-        else:
-            print(f"[WARN] Thiếu {label_path} — training {branch} sẽ fail")
+            files.append(label_path)
         if vocab_path.exists():
-            REQUIRED_FILES.append(vocab_path)
+            files.append(vocab_path)
         acs_path = PROC_DIR / f"human_{branch.upper()}_ACS.json"
         if acs_path.exists():
-            REQUIRED_FILES.append(acs_path)
+            files.append(acs_path)
 
-# Cần cho cả 3 branch
-ppi_graph = PROC_DIR / "ppi_graph_global"
-ppi_index = PROC_DIR / "ppi_protein_index"
-for f in (ppi_graph, ppi_index):
-    if f.exists():
-        REQUIRED_FILES.append(f)
-    else:
-        print(f"[WARN] Thiếu {f} — PPI branch sẽ không hoạt động")
+    if branches == ("mf", "cc", "bp"):
+        for f in (PROC_DIR / "ppi_graph_global", PROC_DIR / "ppi_protein_index"):
+            if f.exists():
+                files.append(f)
+            else:
+                print(f"[WARN] Thiếu {f}")
+    return files
 
 
 def total_size_mb(paths):
@@ -72,16 +66,44 @@ def total_size_mb(paths):
 
 
 def main():
-    if not REQUIRED_FILES:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Pack CAFA6 data for Kaggle upload")
+    parser.add_argument(
+        "--branch",
+        choices=["mf", "cc", "bp", "all"],
+        default="all",
+        help="Chỉ đóng gói một nhánh (vd. mf sau khi sửa mf_train)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Tên file zip (mặc định: kaggle_data.zip hoặc kaggle_mf.zip)",
+    )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=["train", "valid", "test"],
+        choices=["train", "valid", "test"],
+        help="Chỉ pack một split (vd. --splits train ~3.5GB)",
+    )
+    args = parser.parse_args()
+
+    branches = ("mf", "cc", "bp") if args.branch == "all" else (args.branch,)
+    required_files = collect_files(branches, tuple(args.splits))
+    out_zip = args.output or (BASE_DIR / ("kaggle_data.zip" if args.branch == "all" else f"kaggle_{args.branch}.zip"))
+
+    if not required_files:
         print("ERROR: Không tìm thấy file dataset nào. Đã chạy data_processing/divide_data.py chưa?")
         sys.exit(1)
 
-    total_mb = total_size_mb(REQUIRED_FILES)
+    total_mb = total_size_mb(required_files)
     print(f"\nTotal size: {total_mb:,.1f} MB ({total_mb/1024:.2f} GB)")
-    print(f"File count: {len(REQUIRED_FILES)}\n")
+    print(f"File count: {len(required_files)}\n")
 
     print("Files to pack:")
-    for f in REQUIRED_FILES:
+    for f in required_files:
         size_mb = f.stat().st_size / (1024 * 1024)
         rel = f.relative_to(BASE_DIR)
         print(f"  {size_mb:>8.1f} MB  {rel}")
@@ -91,15 +113,15 @@ def main():
         print("[WARN] Tổng > 20 GB — Kaggle giới hạn 20GB/dataset. Cân nhắc tách thành nhiều dataset.")
 
     # Tạo zip với compression nhẹ (pickle đã khá compact)
-    print(f"Creating {OUT_ZIP}...")
-    with zipfile.ZipFile(OUT_ZIP, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
-        for f in REQUIRED_FILES:
+    print(f"Creating {out_zip}...")
+    with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
+        for f in required_files:
             arcname = f.relative_to(BASE_DIR)
             print(f"  + {arcname}")
             zf.write(f, arcname=str(arcname))
 
-    out_size_mb = OUT_ZIP.stat().st_size / (1024 * 1024)
-    print(f"\nDone: {OUT_ZIP} ({out_size_mb:,.1f} MB)")
+    out_size_mb = out_zip.stat().st_size / (1024 * 1024)
+    print(f"\nDone: {out_zip} ({out_size_mb:,.1f} MB)")
     print("\nNext steps:")
     print("  1. https://www.kaggle.com/datasets -> New Dataset")
     print("  2. Upload kaggle_data.zip")

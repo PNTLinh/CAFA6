@@ -30,6 +30,7 @@ test_result/
 proceed_data/
 divided_data/
 kaggle_data.zip
+kaggle_mf_train.zip
 protein_node2onehot
 protein_node2vec
 protein_sequence

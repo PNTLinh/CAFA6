@@ -41,6 +41,13 @@ def ensure_dgl_importable(verbose: bool = True) -> None:
     _run_fix_script()
 
 
+def apply_dgl_patches_only(verbose: bool = True) -> None:
+    """Apply on-disk DGL patches without attempting any pip install."""
+    if verbose:
+        print("[dgl_patch] Applying DGL patches only...")
+    _run_fix_script("--no-install")
+
+
 def main() -> None:
     ensure_dgl_importable()
 

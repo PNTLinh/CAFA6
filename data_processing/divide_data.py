@@ -68,6 +68,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Ghi đè dataset split đã tồn tại",
     )
+    parser.add_argument(
+        "--only",
+        type=str,
+        default="all",
+        choices=["all", "train", "valid", "test"],
+        help="Chỉ ghi một split (vd. train khi valid/test trên Kaggle vẫn OK)",
+    )
     args = parser.parse_args()
 
     data_dir = _resolve_data_dir()
@@ -81,11 +88,21 @@ if __name__ == "__main__":
         train_out = DIVIDED_DIR / f'{ns_type}_train_dataset'
         valid_out = DIVIDED_DIR / f'{ns_type}_valid_dataset'
         test_out = DIVIDED_DIR / f'{ns_type}_test_dataset'
-        if (not args.force) and train_out.exists() and valid_out.exists() and test_out.exists():
+        outs = {
+            "train": train_out,
+            "valid": valid_out,
+            "test": test_out,
+        }
+        if args.only != "all":
+            target = outs[args.only]
+            if target.exists() and not args.force:
+                print(f"skip {ns_type}: {target.name} exists (use --force)")
+                continue
+        elif (not args.force) and train_out.exists() and valid_out.exists() and test_out.exists():
             print(f"skip {ns_type}: output datasets already exist (use --force to rebuild)")
             continue
 
-        print("divide", ns_type, "dataset")
+        print("divide", ns_type, "dataset", f"(only={args.only})" if args.only != "all" else "")
         with open(PROC_DIR / f'emb_graph_{ns_type}', 'rb') as f:
             emb_graph = pickle.load(f)
         with open(PROC_DIR / f'emb_seq_feature_{ns_type}', 'rb') as f:
@@ -105,11 +122,13 @@ if __name__ == "__main__":
         valid_dataset = _build_dataset(emb_graph, emb_seq_feature, emb_label, emb_ppi_node_id, valid_keys)
         test_dataset = _build_dataset(emb_graph, emb_seq_feature, emb_label, emb_ppi_node_id, test_keys)
 
-        _save_dataset(train_out, train_dataset)
-        _save_dataset(valid_out, valid_dataset)
-        _save_dataset(test_out, test_dataset)
-
-        print("train dataset size", len(train_dataset))
-        print("valid dataset size", len(valid_dataset))
-        print("test dataset size",  len(test_dataset))
+        if args.only in ("all", "train"):
+            _save_dataset(train_out, train_dataset)
+            print("train dataset size", len(train_dataset))
+        if args.only in ("all", "valid"):
+            _save_dataset(valid_out, valid_dataset)
+            print("valid dataset size", len(valid_dataset))
+        if args.only in ("all", "test"):
+            _save_dataset(test_out, test_dataset)
+            print("test dataset size", len(test_dataset))
         print(f"done {ns_type} in {time.perf_counter() - start_ts:.2f}s")
