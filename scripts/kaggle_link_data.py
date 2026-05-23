@@ -58,22 +58,45 @@ def _copy_or_link(path: Path, dst: Path, copy: bool) -> None:
         dst.symlink_to(path, target_is_directory=path.is_dir())
 
 
+def _validate_pickle(path: Path, min_bytes: int = 1024) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    size = path.stat().st_size
+    if size < min_bytes:
+        raise RuntimeError(f"{path.name} too small ({size} B) — truncated upload or bad copy")
+    import pickle
+
+    with open(path, "rb") as handle:
+        pickle.load(handle)
+
+
 def main() -> None:
     import argparse
+
+    on_kaggle = os.environ.get("KAGGLE_KERNEL_RUN_TYPE") is not None
+    default_copy = ["all"] if on_kaggle else []
 
     parser = argparse.ArgumentParser(description="Link or repair CAFA6 Kaggle data")
     parser.add_argument(
         "--copy-splits",
         nargs="*",
-        default=[],
+        default=default_copy,
         choices=["mf", "cc", "bp", "all"],
-        help="Make selected divided_data branches writable local copies instead of symlinks",
+        help="Copy divided_data pickles locally (default on Kaggle: all — tránh symlink/EOF)",
     )
     args = parser.parse_args()
 
     work = Path(os.environ.get("DATA_DIR", "/kaggle/working/CAFA6"))
     data_root = find_cafa6_data_root(Path("/kaggle/input"))
     print("Data root:", data_root)
+
+    proc = data_root / "proceed_data"
+    emb_mf = proc / "emb_graph_mf"
+    if not emb_mf.exists():
+        print(
+            "[INFO] proceed_data không có emb_graph_* — KHÔNG chạy divide_data.py trên Kaggle. "
+            "Dùng divided_data/*_train_dataset có sẵn trong dataset."
+        )
 
     copy_branch_names = set(args.copy_splits)
     copy_all_splits = "all" in copy_branch_names
@@ -104,7 +127,20 @@ def main() -> None:
     print(f"  {dst} <- {src} (writable branches: {sorted(copy_branch_names) or 'none'})")
 
     assert (work / "proceed_data/ppi_graph_global").exists()
-    assert (work / "divided_data/mf_train_dataset").exists()
+    for branch in ("mf", "cc", "bp"):
+        for split in ("train", "valid"):
+            p = work / "divided_data" / f"{branch}_{split}_dataset"
+            if not p.exists():
+                print(f"[WARN] missing {p.name}")
+                continue
+            try:
+                _validate_pickle(p)
+                print(f"  OK {p.name} ({p.stat().st_size / 1e6:.1f} MB)")
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Pickle invalid: {p}. Re-upload dataset or run with --copy-splits all "
+                    f"after fixing source under {data_root / 'divided_data'}"
+                ) from exc
     print("Data OK")
 
 
