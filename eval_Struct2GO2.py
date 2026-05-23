@@ -135,6 +135,65 @@ def _align_vocab_to_output(idx2term: list, output_dim: int) -> list:
     return terms
 
 
+def _as_flat_float_tensor(x) -> torch.Tensor:
+    return torch.as_tensor(np.asarray(x), dtype=torch.float32).reshape(-1)
+
+
+def _as_scalar_long_tensor(x) -> torch.Tensor:
+    return torch.as_tensor(x, dtype=torch.long).reshape(())
+
+
+def _fix_dim_1d(x: torch.Tensor, target_dim: int) -> torch.Tensor:
+    cur = int(x.shape[0])
+    if cur == target_dim:
+        return x
+    if cur > target_dim:
+        return x[:target_dim]
+    out = torch.zeros(target_dim, dtype=x.dtype)
+    out[:cur] = x
+    return out
+
+
+def _build_eval_collate_fn(seq_dim: int, label_dim: int):
+    warned = {"seq": False, "label": False}
+
+    def _collate(batch):
+        pids, graphs, labels, seq_feats, ppi_node_ids = zip(*batch)
+
+        fixed_seq_feats = []
+        for s in seq_feats:
+            t = _as_flat_float_tensor(s)
+            if (not warned["seq"]) and int(t.shape[0]) != seq_dim:
+                print(
+                    f"[WARN] Sequence feature dim mismatch in batch "
+                    f"(got {int(t.shape[0])}, expected {seq_dim}); applying pad/truncate"
+                )
+                warned["seq"] = True
+            fixed_seq_feats.append(_fix_dim_1d(t, seq_dim))
+
+        fixed_labels = []
+        for y in labels:
+            t = _as_flat_float_tensor(y)
+            if (not warned["label"]) and int(t.shape[0]) != label_dim:
+                print(
+                    f"[WARN] Label dim mismatch in batch "
+                    f"(got {int(t.shape[0])}, expected {label_dim}); applying pad/truncate"
+                )
+                warned["label"] = True
+            fixed_labels.append(_fix_dim_1d(t, label_dim))
+
+        batched_graph = dgl.batch(list(graphs))
+        return (
+            list(pids),
+            batched_graph,
+            torch.stack(fixed_labels, dim=0),
+            torch.stack(fixed_seq_feats, dim=0),
+            torch.stack([_as_scalar_long_tensor(pid) for pid in ppi_node_ids], dim=0),
+        )
+
+    return _collate
+
+
 if __name__ == "__main__":
     
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -189,8 +248,25 @@ if __name__ == "__main__":
         with torch.no_grad():
             ppi_node_emb = model.encode_ppi_nodes(ppi_graph)
 
+    if hasattr(model, "fusion_attn") and hasattr(model.fusion_attn, "seq_proj"):
+        seq_dim = int(model.fusion_attn.seq_proj.in_features)
+    else:
+        seq_dim = int(np.asarray(test_dataset[0][3]).reshape(-1).shape[0])
+    if hasattr(model, "lin3"):
+        label_dim = int(model.lin3.out_features)
+    else:
+        label_dim = int(label_network.num_nodes())
+
+    collate_fn = _build_eval_collate_fn(seq_dim=seq_dim, label_dim=label_dim)
+
     batch_size = 32
-    test_dataloader = GraphDataLoader(dataset=test_dataset, batch_size = batch_size, drop_last = False, shuffle = False)
+    test_dataloader = GraphDataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,
+        drop_last=False,
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
     criterion = nn.CrossEntropyLoss()
     logger.info('#########'+args.branch+'###########')
     logger.info('########start testing###########') 
