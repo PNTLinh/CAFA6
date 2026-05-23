@@ -51,6 +51,34 @@ print("OK", torch.__version__, dgl.__version__, g.device)
 !ls /kaggle/working/CAFA6/divided_data/*_train_dataset
 ```
 
+## Cell 4.5 — Khóa `DATA_DIR` và kiểm tra split
+
+Chạy cell này trước khi train/eval để tránh notebook cũ hoặc kernel cũ quay về `D:/CAFA6`.
+
+```python
+import os
+from pathlib import Path
+
+os.environ["DATA_DIR"] = "/kaggle/working/CAFA6"
+print("DATA_DIR =", os.environ["DATA_DIR"])
+
+data_root = Path(os.environ["DATA_DIR"])
+for rel_path in ["proceed_data", "divided_data"]:
+    print(rel_path, (data_root / rel_path).exists())
+
+for rel_path in [
+    "divided_data/cc_test_dataset",
+    "divided_data/cc_valid_dataset",
+    "divided_data/mf_test_dataset",
+    "divided_data/mf_valid_dataset",
+    "divided_data/bp_test_dataset",
+    "divided_data/bp_valid_dataset",
+]:
+    print(rel_path, (data_root / rel_path).exists())
+```
+
+Nếu `cc_test_dataset` và `cc_valid_dataset` đều `False`, dữ liệu Kaggle chưa đủ để eval branch `cc`; cần re-run `kaggle_link_data.py` hoặc pack lại dataset.
+
 ---
 
 ## Cell 5 — Train CC → MF → BP, lưu từng nhánh, cập nhật zip
