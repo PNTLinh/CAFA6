@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import argparse
 import numpy as np
+import warnings
 
 from model.dgl_patch import ensure_dgl_importable
 
@@ -102,9 +103,12 @@ def _load_vocab(data_dir: str, branch: str) -> list:
         terms = sorted({t for terms in protein_labels.values() for t in terms})
         print(f"[INFO] Built vocab from {acs_path} ({len(terms)} terms)")
         return terms
-    raise FileNotFoundError(
-        f"Missing label_vocab_{branch}.json and {_ACS_FILES[branch]} under {proc}"
+    warnings.warn(
+        f"Missing label_vocab_{branch}.json and {_ACS_FILES[branch]} under {proc}; "
+        "falling back to placeholder GO term names based on label graph size. "
+        "This lets evaluation run, but result JSON will not contain real GO IDs."
     )
+    return []
 
 
 if __name__ == "__main__":
@@ -147,9 +151,12 @@ if __name__ == "__main__":
 
     test_dataset = _load_pickle(test_data_path)
     label_network = _load_pickle(label_network_path)
-    idx2term = _load_vocab(data_dir, args.branch)
     ppi_graph = _load_pickle(ppi_graph_path)
     label_network = label_network.to(device)
+    idx2term = _load_vocab(data_dir, args.branch)
+    if not idx2term:
+        idx2term = [f"GO_TERM_{i:05d}" for i in range(label_network.num_nodes())]
+        print(f"[WARN] Using placeholder vocabulary with {len(idx2term)} terms")
     model = torch.load(model_path, map_location=device)
     model = model.to(device)
     ppi_graph = ppi_graph.to(device)
