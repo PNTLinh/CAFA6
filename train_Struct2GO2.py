@@ -143,6 +143,44 @@ def apply_kaggle_preset(args: argparse.Namespace) -> None:
     args.validate_every = args.epochs
 
 
+def apply_baseline_parity_preset(args: argparse.Namespace) -> None:
+    """Train protocol khớp baseline Struct2GO (Table 1); kiến trúc vẫn có PPI."""
+    args.epochs = 20
+    args.batch_size = 64
+    args.learningrate = 1e-4
+    args.dropout = 0.3
+    args.hid_dim = 512
+    args.num_convs = 6
+    args.pool_ratio = 0.75
+    args.ppi_out_dim = 256
+    args.validate_every = 4
+    args.num_workers = 4
+    args.amp = False
+    global Thresholds
+    Thresholds = [x / 100 for x in range(1, 100)]
+
+
+def _restore_cli_overrides(
+    args: argparse.Namespace, overrides: dict[str, Any], extra_keys: tuple[str, ...] = ()
+) -> None:
+    """Giữ giá trị CLI nếu user truyền flag tương ứng."""
+    key_to_flags = {
+        "batch_size": ("-batch_size", "--batch_size"),
+        "epochs": ("-epochs", "--epochs"),
+        "dropout": ("-dropout", "--dropout"),
+        "learningrate": ("-learningrate", "--learningrate"),
+        "hid_dim": ("-hid_dim", "--hid_dim"),
+        "num_convs": ("-num_convs", "--num_convs"),
+        "pool_ratio": ("-pool_ratio", "--pool_ratio"),
+        "ppi_out_dim": ("-ppi_out_dim", "--ppi_out_dim"),
+        "validate_every": ("-validate_every", "--validate_every"),
+    }
+    for key in extra_keys:
+        flags = key_to_flags.get(key)
+        if flags and _argv_has(*flags) and key in overrides:
+            setattr(args, key, overrides[key])
+
+
 def labels_to_device(labels: torch.Tensor, device: torch.device) -> torch.Tensor:
     labels = torch.squeeze(labels)
     if len(labels.shape) == 1:
@@ -160,8 +198,22 @@ def main():
     parser.add_argument("-epochs", "--epochs", type=int, default=3)
     parser.add_argument("-hid_dim", "--hid_dim", type=int, default=256)
     parser.add_argument("-num_convs", "--num_convs", type=int, default=3)
+    parser.add_argument("-pool_ratio", "--pool_ratio", type=float, default=0.5)
     parser.add_argument("-seq_dim", "--seq_dim", type=int, default=640)
-    parser.add_argument("-ppi_out_dim", "--ppi_out_dim", type=int, default=128)
+    parser.add_argument("-ppi_out_dim", "--ppi_out_dim", type=int, default=256)
+    parser.set_defaults(use_ppi=True, baseline_parity=True)
+    parser.add_argument(
+        "--no-ppi",
+        dest="use_ppi",
+        action="store_false",
+        help="Tắt nhánh PPI + cross-attention (chỉ struct + sequence)",
+    )
+    parser.add_argument(
+        "--no-baseline-parity",
+        dest="baseline_parity",
+        action="store_false",
+        help="Không dùng preset hyperparameter baseline (20 epoch, hid=512, …)",
+    )
     parser.add_argument("-num_workers", "--num_workers", type=int, default=4)
     parser.add_argument("-validate_every", "--validate_every", type=int, default=4,
                         help="Validate mỗi N epoch (1 = mỗi epoch)")
@@ -172,31 +224,44 @@ def main():
     parser.add_argument("--cpu", action="store_true", help="Bắt buộc train trên CPU")
     parser.add_argument("--kaggle", action="store_true",
                         help="Preset T4 ~30p/nhánh: mf/cc 5 epoch, bp 4 epoch, hid=256, amp")
+    parser.add_argument(
+        "--baseline-parity",
+        dest="baseline_parity",
+        action="store_true",
+        help="Preset train khớp baseline paper (mặc định bật; dùng --no-baseline-parity để tắt)",
+    )
     args = parser.parse_args()
 
-    if args.kaggle:
-        cli_overrides = {
-            "batch_size": args.batch_size,
-            "epochs": args.epochs,
-            "dropout": args.dropout,
-            "learningrate": args.learningrate,
-            "hid_dim": args.hid_dim,
-            "num_convs": args.num_convs,
-            "validate_every": args.validate_every,
-        }
+    cli_overrides = {
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "dropout": args.dropout,
+        "learningrate": args.learningrate,
+        "hid_dim": args.hid_dim,
+        "num_convs": args.num_convs,
+        "pool_ratio": args.pool_ratio,
+        "ppi_out_dim": args.ppi_out_dim,
+        "validate_every": args.validate_every,
+    }
+
+    if args.baseline_parity:
+        apply_baseline_parity_preset(args)
+        _restore_cli_overrides(
+            args,
+            cli_overrides,
+            (
+                "batch_size", "epochs", "dropout", "learningrate", "hid_dim", "num_convs",
+                "pool_ratio", "ppi_out_dim", "validate_every",
+            ),
+        )
+    elif args.kaggle:
+        args.baseline_parity = False
         apply_kaggle_preset(args)
-        if _argv_has("-batch_size", "--batch_size"):
-            args.batch_size = cli_overrides["batch_size"]
-        if _argv_has("-epochs", "--epochs"):
-            args.epochs = cli_overrides["epochs"]
-        if _argv_has("-dropout", "--dropout"):
-            args.dropout = cli_overrides["dropout"]
-        if _argv_has("-learningrate", "--learningrate"):
-            args.learningrate = cli_overrides["learningrate"]
-        if _argv_has("-hid_dim", "--hid_dim"):
-            args.hid_dim = cli_overrides["hid_dim"]
-        if _argv_has("-num_convs", "--num_convs"):
-            args.num_convs = cli_overrides["num_convs"]
+        _restore_cli_overrides(
+            args,
+            cli_overrides,
+            ("batch_size", "epochs", "dropout", "learningrate", "hid_dim", "num_convs"),
+        )
         args.validate_every = args.epochs
 
     device = resolve_device(force_cpu=args.cpu)
@@ -211,10 +276,14 @@ def main():
     ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
 
     logger = create_logger(args.branch, data_dir)
-    logger.info(f"device={device}, amp={args.amp}, cache_ppi={args.cache_ppi}, kaggle={args.kaggle}")
+    logger.info(
+        f"device={device}, amp={args.amp}, cache_ppi={args.cache_ppi}, "
+        f"kaggle={args.kaggle}, baseline_parity={args.baseline_parity}, use_ppi={args.use_ppi}"
+    )
     logger.info(
         f"epochs={args.epochs}, batch_size={args.batch_size}, dropout={args.dropout}, "
-        f"lr={args.learningrate}, validate_every={args.validate_every}"
+        f"lr={args.learningrate}, validate_every={args.validate_every}, "
+        f"hid={args.hid_dim}, convs={args.num_convs}, pool_ratio={args.pool_ratio}"
     )
     logger.info(f"data_dir={data_dir}, cwd={os.getcwd()}")
 
@@ -224,8 +293,12 @@ def main():
     label_network = _load_pickle(label_network_path)
     label_network = label_network.to(device)
 
-    ppi_graph = _load_pickle(ppi_graph_path)
-    ppi_graph = ppi_graph.to(device)
+    ppi_graph = None
+    ppi_feat_dim = args.seq_dim
+    if args.use_ppi:
+        ppi_graph = _load_pickle(ppi_graph_path)
+        ppi_graph = ppi_graph.to(device)
+        ppi_feat_dim = int(ppi_graph.ndata["feat"].shape[1])
 
     sample_label = train_dataset[0][2]
     detected_labels = int(np.asarray(sample_label).reshape(-1).shape[0])
@@ -237,8 +310,7 @@ def main():
 
     sample_seq = np.asarray(train_dataset[0][3]).reshape(-1)
     args.seq_dim = int(sample_seq.shape[0])
-    ppi_feat_dim = int(ppi_graph.ndata["feat"].shape[1])
-    if ppi_feat_dim != args.seq_dim:
+    if args.use_ppi and ppi_feat_dim != args.seq_dim:
         print(f"[INFO] ppi_in_dim={ppi_feat_dim} (from ppi_graph.ndata['feat'])")
 
     loader_kw = dict(
@@ -260,18 +332,24 @@ def main():
         args.hid_dim,
         labels_num,
         num_convs=args.num_convs,
-        pool_ratio=0.5,
+        pool_ratio=args.pool_ratio,
         dropout=args.dropout,
         seq_dim=args.seq_dim,
         ppi_in_dim=ppi_feat_dim,
         ppi_hid_dim=args.hid_dim,
         ppi_out_dim=args.ppi_out_dim,
+        use_ppi=args.use_ppi,
     ).to(device)
 
-    optimizer = optim.AdamW(model.parameters(), lr=args.learningrate, weight_decay=1e-4)
     total_steps = args.epochs * max(len(train_dataloader), 1)
+    if args.baseline_parity:
+        optimizer = optim.Adam(model.parameters(), lr=args.learningrate)
+        warmup_steps = min(100, max(1, total_steps // 20))
+    else:
+        optimizer = optim.AdamW(model.parameters(), lr=args.learningrate, weight_decay=1e-4)
+        warmup_steps = min(200, total_steps // 10)
     lr_scheduler = get_cosine_schedule_with_warmup(
-        optimizer, num_warmup_steps=min(200, total_steps // 10), num_training_steps=total_steps
+        optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps
     )
     criterion = nn.BCEWithLogitsLoss()
     scaler = torch.cuda.amp.GradScaler(enabled=use_cuda and args.amp)
@@ -290,7 +368,7 @@ def main():
         model.train()
 
         ppi_node_emb = None
-        if args.cache_ppi:
+        if args.use_ppi and args.cache_ppi:
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=use_cuda and args.amp):
                 ppi_node_emb = model.encode_ppi_nodes(ppi_graph).detach()
 
@@ -309,8 +387,8 @@ def main():
                     graphs,
                     seq_feats,
                     label_network,
-                    ppi_graph=ppi_graph,
-                    ppi_node_ids=ppi_node_ids,
+                    ppi_graph=ppi_graph if args.use_ppi else None,
+                    ppi_node_ids=ppi_node_ids if args.use_ppi else None,
                     ppi_node_emb=ppi_node_emb,
                 )
                 loss = criterion(logits, labels)
@@ -338,7 +416,7 @@ def main():
         valid_loss = 0.0
         pred, actual = [], []
 
-        if args.cache_ppi:
+        if args.use_ppi and args.cache_ppi:
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=use_cuda and args.amp):
                 ppi_node_emb = model.encode_ppi_nodes(ppi_graph).detach()
 
@@ -356,8 +434,8 @@ def main():
                         graphs,
                         seq_feats,
                         label_network,
-                        ppi_graph=ppi_graph,
-                        ppi_node_ids=ppi_node_ids,
+                        ppi_graph=ppi_graph if args.use_ppi else None,
+                        ppi_node_ids=ppi_node_ids if args.use_ppi else None,
                         ppi_node_emb=ppi_node_emb,
                     )
                     loss = criterion(logits, labels)

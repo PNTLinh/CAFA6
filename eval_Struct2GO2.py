@@ -26,6 +26,14 @@ import os
 import logging
 import json
 import matplotlib.pyplot as plt
+import sys
+
+
+def _argv_has(*names: str) -> bool:
+    return any(n in sys.argv for n in names)
+
+
+_BASELINE_EVAL_THRESH = {"mf": 0.71, "cc": 0.5, "bp": 0.4}
 
 
 def _load_model_checkpoint(model_path, device):
@@ -209,14 +217,45 @@ if __name__ == "__main__":
         choices=["auto", "test", "valid", "train"],
         help="auto: test nếu có, không thì valid (phù hợp Kaggle pack)",
     )
+    parser.set_defaults(use_ppi=True, baseline_parity=True)
+    parser.add_argument(
+        "--no-ppi",
+        dest="use_ppi",
+        action="store_false",
+        help="Không load PPI graph khi eval (model train không PPI)",
+    )
+    parser.add_argument(
+        "--no-baseline-parity",
+        dest="baseline_parity",
+        action="store_false",
+        help="Eval nhanh: split auto, model path theo run Kaggle",
+    )
+    parser.add_argument(
+        "--baseline-parity",
+        dest="baseline_parity",
+        action="store_true",
+        help="Eval khớp baseline (mặc định bật)",
+    )
     args = parser.parse_args()
+
+    if args.baseline_parity:
+        args.split = "test"
+        if not _argv_has("-thresh", "--thresh"):
+            args.thresh = _BASELINE_EVAL_THRESH.get(args.branch, 0.71)
 
     input_thresh = args.thresh
     data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")
     test_data_path, eval_split = _resolve_eval_dataset(data_dir, args.branch, args.split)
     label_network_path = f"{data_dir}/proceed_data/label_{args.branch}_network"
     ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
-    model_path = args.model_path or f"{data_dir}/save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl"
+    if args.model_path:
+        model_path = args.model_path
+    elif args.baseline_parity:
+        model_path = (
+            f"{data_dir}/save_models/bestmodel_{args.branch}_64_0.0001_0.3.pkl"
+        )
+    else:
+        model_path = f"{data_dir}/save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl"
     if not os.path.isabs(model_path) and not os.path.isfile(model_path):
         alt = os.path.join(data_dir, model_path)
         if os.path.isfile(alt):
@@ -226,7 +265,11 @@ if __name__ == "__main__":
     os.makedirs(result_dir, exist_ok=True)
 
     logger = create_logger(args.branch, data_dir)
-    logger.info(f"eval split={eval_split}, dataset={test_data_path}")
+    logger.info(
+        f"eval split={eval_split}, dataset={test_data_path}, "
+        f"baseline_parity={args.baseline_parity}, use_ppi={args.use_ppi}, "
+        f"thresh={input_thresh}, model={model_path}"
+    )
 
     import __main__
 
@@ -234,17 +277,24 @@ if __name__ == "__main__":
 
     test_dataset = _load_pickle(test_data_path)
     label_network = _load_pickle(label_network_path)
-    ppi_graph = _load_pickle(ppi_graph_path)
     label_network = label_network.to(device)
+    ppi_graph = None
+    if args.use_ppi:
+        ppi_graph = _load_pickle(ppi_graph_path)
+        ppi_graph = ppi_graph.to(device)
     idx2term = _load_vocab(data_dir, args.branch)
     if not idx2term:
         idx2term = [f"GO_TERM_{i:05d}" for i in range(label_network.num_nodes())]
         print(f"[WARN] Using placeholder vocabulary with {len(idx2term)} terms")
     model = _load_model_checkpoint(model_path, device)
     model = model.to(device)
-    ppi_graph = ppi_graph.to(device)
+    use_ppi = getattr(model, "use_ppi", args.use_ppi)
+    if args.use_ppi and not use_ppi:
+        print("[WARN] --use_ppi set but checkpoint has use_ppi=False; following model")
+    if not use_ppi:
+        args.use_ppi = False
     ppi_node_emb = None
-    if hasattr(model, 'encode_ppi_nodes'):
+    if use_ppi and ppi_graph is not None and hasattr(model, "encode_ppi_nodes"):
         with torch.no_grad():
             ppi_node_emb = model.encode_ppi_nodes(ppi_graph)
 
@@ -289,8 +339,12 @@ if __name__ == "__main__":
                 labels = labels.unsqueeze(0)
             
             logits = model(
-                graphs, seq_feats, label_network,
-                ppi_graph=ppi_graph, ppi_node_ids=ppi_node_ids, ppi_node_emb=ppi_node_emb,
+                graphs,
+                seq_feats,
+                label_network,
+                ppi_graph=ppi_graph if args.use_ppi else None,
+                ppi_node_ids=ppi_node_ids if args.use_ppi else None,
+                ppi_node_emb=ppi_node_emb,
             )
             logits = F.sigmoid(logits)
             

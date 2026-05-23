@@ -61,11 +61,12 @@ class SAGNetworkHierarchical(torch.nn.Module):
                  pool_ratio: float = 0.5, dropout: float = 0.5,
                  seq_dim: int = 640,
                  ppi_in_dim: int = 640, ppi_hid_dim: int = 512, ppi_out_dim: int = 256,
-                 fusion_attn_heads: int = 4):
+                 fusion_attn_heads: int = 4, use_ppi: bool = True):
         super(SAGNetworkHierarchical, self).__init__()
 
         self.dropout = dropout
         self.num_convpools = num_convs
+        self.use_ppi = use_ppi
 
         convpools = []
         for i in range(num_convs):
@@ -74,24 +75,27 @@ class SAGNetworkHierarchical(torch.nn.Module):
             convpools.append(ConvPoolBlock(_i_dim, _o_dim, pool_ratio=pool_ratio))
         self.convpools = torch.nn.ModuleList(convpools)
 
-        # PPI encoder: GraphSAGE trên PPI global graph
-        self.ppi_encoder = PPIEncoder(
-            in_dim=ppi_in_dim,
-            hid_dim=ppi_hid_dim,
-            out_dim=ppi_out_dim,
-            dropout=dropout,
-        )
+        if use_ppi:
+            self.ppi_encoder = PPIEncoder(
+                in_dim=ppi_in_dim,
+                hid_dim=ppi_hid_dim,
+                out_dim=ppi_out_dim,
+                dropout=dropout,
+            )
+            self.fusion_attn = MultiModalCrossAttention(
+                struct_dim=hid_dim * 2,
+                seq_dim=seq_dim,
+                ppi_dim=ppi_out_dim,
+                attn_dim=hid_dim,
+                num_heads=fusion_attn_heads,
+                dropout=dropout,
+            )
+            fusion_dim = self.fusion_attn.out_dim
+        else:
+            self.ppi_encoder = None
+            self.fusion_attn = None
+            fusion_dim = hid_dim * 2 + seq_dim
 
-        # Fusion: struct + seq cross-attend to PPI (thay cho concat)
-        self.fusion_attn = MultiModalCrossAttention(
-            struct_dim=hid_dim * 2,
-            seq_dim=seq_dim,
-            ppi_dim=ppi_out_dim,
-            attn_dim=hid_dim,
-            num_heads=fusion_attn_heads,
-            dropout=dropout,
-        )
-        fusion_dim = self.fusion_attn.out_dim
         self.lin1 = torch.nn.Linear(fusion_dim, hid_dim * 2)
         self.lin2 = torch.nn.Linear(hid_dim * 2, hid_dim)
         self.lin3 = torch.nn.Linear(hid_dim, out_dim)
@@ -118,6 +122,8 @@ class SAGNetworkHierarchical(torch.nn.Module):
 
     def encode_ppi_nodes(self, ppi_graph: dgl.DGLGraph) -> torch.Tensor:
         """Cache PPI node embeddings [N, ppi_out_dim] — gọi 1 lần/epoch khi train."""
+        if not self.use_ppi:
+            raise RuntimeError("encode_ppi_nodes called but use_ppi=False")
         return self.ppi_encoder.encode_all_nodes(ppi_graph)
 
     def forward(self, graph: dgl.DGLGraph, sequence_feature: torch.Tensor,
@@ -139,12 +145,14 @@ class SAGNetworkHierarchical(torch.nn.Module):
             graph, feat, readout = self.convpools[i](graph, feat)
             final_readout = readout if final_readout is None else final_readout + readout
 
-        # --- PPI branch + cross-attention fusion ---
-        if ppi_node_emb is not None:
-            ppi_emb = PPIEncoder.gather_batch(ppi_node_emb, ppi_node_ids)
+        if self.use_ppi:
+            if ppi_node_emb is not None:
+                ppi_emb = PPIEncoder.gather_batch(ppi_node_emb, ppi_node_ids)
+            else:
+                ppi_emb = self.ppi_encoder(ppi_graph, ppi_node_ids)
+            final_readout = self.fusion_attn(final_readout, sequence_feature, ppi_emb)
         else:
-            ppi_emb = self.ppi_encoder(ppi_graph, ppi_node_ids)
-        final_readout = self.fusion_attn(final_readout, sequence_feature, ppi_emb)
+            final_readout = torch.cat((final_readout, sequence_feature), dim=-1)
 
         feat = F.relu(self.lin1(final_readout))
         feat = F.dropout(feat, p=self.dropout, training=self.training)

@@ -62,6 +62,8 @@ Script này sẽ tự tìm `proceed_data/ppi_graph_global` và `divided_data/*` 
 
 Preset `--kaggle`: **mf/cc** 5 epoch, **bp** 4 epoch, `hid_dim=256`, validate 1 lần ở epoch cuối (~30 phút/nhánh trên T4).
 
+**So sánh công bằng với paper (Table 1):** mặc định repo đã bật `--baseline-parity` + **PPI**; trên Kaggle dùng `--kaggle` để train nhanh (~30p/nhánh). Xem [`baseline/FAIR_COMPARISON.md`](baseline/FAIR_COMPARISON.md).
+
 ```python
 %env DATA_DIR=/kaggle/working/CAFA6
 %env DGL_CUDA=1
