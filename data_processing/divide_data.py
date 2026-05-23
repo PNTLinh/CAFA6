@@ -3,6 +3,7 @@ import sys
 import argparse
 import random
 import time
+import os
 from pathlib import Path
 
 if __package__ is None or __package__ == "":
@@ -40,6 +41,18 @@ def _save_dataset(path, dataset):
     with open(path, 'wb') as f:
         pickle.dump(dataset, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+
+def _resolve_data_dir() -> Path:
+    env_data_dir = os.environ.get("DATA_DIR")
+    candidates = []
+    if env_data_dir:
+        candidates.append(Path(env_data_dir))
+    candidates.extend([Path(__file__).resolve().parents[1], Path.cwd()])
+    for candidate in candidates:
+        if (candidate / "proceed_data").is_dir():
+            return candidate
+    return Path(env_data_dir) if env_data_dir else Path(__file__).resolve().parents[1]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
@@ -57,8 +70,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    PROC_DIR    = Path("D:/CAFA6/proceed_data")
-    DIVIDED_DIR = Path("D:/CAFA6/divided_data")
+    data_dir = _resolve_data_dir()
+    PROC_DIR    = data_dir / "proceed_data"
+    DIVIDED_DIR = data_dir / "divided_data"
     DIVIDED_DIR.mkdir(parents=True, exist_ok=True)
 
     ns_type_list = ['bp', 'mf', 'cc'] if args.namespace == "all" else [args.namespace]
