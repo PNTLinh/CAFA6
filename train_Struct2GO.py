@@ -27,6 +27,33 @@ from tqdm import tqdm
 import logging
 import os
 
+def _as_flat_float_tensor(x):
+    return torch.as_tensor(np.asarray(x), dtype=torch.float32).reshape(-1)
+
+
+def _fix_dim_1d(x, target_dim):
+    cur = int(x.shape[0])
+    if cur == target_dim:
+        return x
+    if cur > target_dim:
+        return x[:target_dim]
+    out = torch.zeros(target_dim, dtype=x.dtype)
+    out[:cur] = x
+    return out
+
+
+def _train_collate(samples, seq_dim, label_dim):
+    pids, graphs, labels, seq_feats = zip(*samples)
+    fixed_seq_feats = [_fix_dim_1d(_as_flat_float_tensor(seq), seq_dim) for seq in seq_feats]
+    fixed_labels = [_fix_dim_1d(_as_flat_float_tensor(lbl), label_dim) for lbl in labels]
+    return (
+        list(pids),
+        dgl.batch(list(graphs)),
+        torch.stack(fixed_labels, dim=0),
+        torch.stack(fixed_seq_feats, dim=0),
+    )
+
+
 def create_logger(branch_name):
     logger = logging.getLogger(branch_name)
     handler1 = logging.StreamHandler()
@@ -77,13 +104,15 @@ if __name__ == "__main__":
     learningrate = args.learningrate
     dropout = args.dropout
     labels_num = args.labels_num
+    seq_dim = int(np.asarray(train_dataset[0][3]).reshape(-1).shape[0])
     
     # 加载数据
-    train_dataloader = GraphDataLoader(dataset=train_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
-    valid_dataloader = GraphDataLoader(dataset=valid_dataset, batch_size = batch_size, drop_last = False, shuffle = True)
+    collate_fn = lambda samples: _train_collate(samples, seq_dim=seq_dim, label_dim=labels_num)
+    train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_size, drop_last=False, shuffle=True, collate_fn=collate_fn)
+    valid_dataloader = DataLoader(dataset=valid_dataset, batch_size=batch_size, drop_last=False, shuffle=True, collate_fn=collate_fn)
     
     # 数据处理默认输出 onehot(26) + PPI node2vec(30) = 56-dim
-    model = SAGNetworkHierarchical(56, 512, labels_num, num_convs=6, pool_ratio=0.75, dropout=dropout).to(device)
+    model = SAGNetworkHierarchical(56, 512, labels_num, num_convs=6, pool_ratio=0.75, dropout=dropout, seq_dim=seq_dim).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learningrate)
     lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=100, num_training_steps=epoch_num*len(train_dataloader))
     criterion = nn.CrossEntropyLoss()
