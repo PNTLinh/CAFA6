@@ -47,7 +47,24 @@ def _torch_version() -> str:
     return torch.__version__
 
 
-_DGL_RUNTIME_DEPS = ("numpy", "scipy", "networkx", "requests", "psutil", "tqdm")
+_DGL_RUNTIME_DEPS = (
+    "numpy>=1.26.0,<2.2",
+    "scipy>=1.11,<1.16",
+    "torchdata==0.11.0",
+    "networkx",
+    "requests",
+    "psutil",
+    "tqdm",
+)
+
+# Wheels on https://data.dgl.ai/wheels/torch-2.6/cu124/ (Kaggle T4, May 2026)
+_DGL_CUDA_SPECS = (
+    "2.5.0+cu124",
+    "2.4.0+cu124",
+    "2.1.0+cu124",
+    "2.1.0+cu121",
+    "2.1.0",
+)
 
 
 def _install_dgl_runtime_deps() -> None:
@@ -61,7 +78,7 @@ def _try_install_dgl_from(url: str, *specs: str, force: bool = False) -> bool:
         return True
 
     if not specs:
-        specs = ("2.1.0+cu121", "2.1.0+cu124", "2.1.0")
+        specs = _DGL_CUDA_SPECS
 
     torch_before = _torch_version()
     for spec in specs:
@@ -87,21 +104,20 @@ def _install_pytorch_26_cu124() -> None:
     """Align torch/torchaudio/torchvision (Kaggle torchaudio 2.10 pins torch 2.10)."""
     print("[install] PyTorch 2.6.0+cu124 stack")
     pip("uninstall", "-y", "torch", "torchaudio", "torchvision")
-    pip(
-        "install",
-        "-q",
-        "--force-reinstall",
+    idx = "https://download.pytorch.org/whl/cu124"
+    for pkg in (
         "torch==2.6.0",
         "torchvision==0.21.0",
         "torchaudio==2.6.0",
-        "--index-url",
-        "https://download.pytorch.org/whl/cu124",
-    )
+    ):
+        pip("install", "-q", "--force-reinstall", "--no-deps", pkg, "--index-url", idx)
+    pip("install", "-q", "typing-extensions", "sympy", "filelock", "jinja2", "fsspec")
     ver = _torch_version()
     print(f"[install] torch now {ver}")
     if not ver.startswith("2.6"):
-        raise RuntimeError(
-            f"torch is {ver}, expected 2.6.x. Restart Kaggle session and rerun (pip pulled torch 2.12)."
+        print(
+            f"[install] WARN torch is {ver} (expected 2.6.x). "
+            "Restart Kaggle session, run ONLY the DGL install cell, then train."
         )
 
 
@@ -109,7 +125,6 @@ def install_dgl_cuda() -> None:
     """Install DGL 2.1 with CUDA. Kaggle torch 2.10+cu128: prefer cu121 DGL or full torch 2.6 stack."""
     import torch
 
-    pip("uninstall", "-y", "torchdata")
     if not torch.cuda.is_available():
         print("[install] No CUDA in PyTorch — enable GPU T4 on Kaggle")
         pip("install", "-q", "dgl==2.1.0")
@@ -143,19 +158,18 @@ def install_dgl_cuda() -> None:
         if url in seen:
             continue
         seen.add(url)
-        if _try_install_dgl_from(url, "2.1.0+cu121", "2.1.0+cu124", "2.1.0"):
+        if _try_install_dgl_from(url, *_DGL_CUDA_SPECS):
             return
 
     print(
         f"[install] No DGL CUDA wheel matched torch {torch.__version__} cuda {cuda}. "
-        "Switching to PyTorch 2.6.0+cu124 + DGL cu124..."
+        "Switching to PyTorch 2.6.0+cu124 + DGL 2.5.0+cu124..."
     )
     _install_pytorch_26_cu124()
-    # Preferred stack (matches kaggle_notebook.md): torch 2.6 + cu124 + dgl cu124 wheel
+    _install_dgl_runtime_deps()
     if _try_install_dgl_from(
         "https://data.dgl.ai/wheels/torch-2.6/cu124/repo.html",
-        "2.1.0",
-        "2.1.0+cu124",
+        *_DGL_CUDA_SPECS,
         force=True,
     ):
         return
@@ -163,13 +177,13 @@ def install_dgl_cuda() -> None:
         "https://data.dgl.ai/wheels/cu124/repo.html",
         "https://data.dgl.ai/wheels/cu121/repo.html",
     ):
-        if _try_install_dgl_from(url, "2.1.0+cu124", "2.1.0+cu121", "2.1.0", force=True):
+        if _try_install_dgl_from(url, *_DGL_CUDA_SPECS, force=True):
             return
-    if not _torch_version().startswith("2.6"):
-        raise RuntimeError(f"torch became {_torch_version()} after DGL install")
 
     raise RuntimeError(
-        "Could not install DGL with CUDA. Restart session, then rerun this script."
+        "Could not install DGL with CUDA. Restart Kaggle session, run ONLY:\n"
+        "  !python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py\n"
+        "then verify CUDA before train."
     )
 
 
@@ -283,11 +297,12 @@ def fix_dgl_init(root: Path) -> None:
         print(f"[fix] {py}")
 
 
-def main() -> None:
-    if "--no-install" not in sys.argv:
-        install_dgl_cuda()
-
+def apply_patches_only() -> None:
     root = dgl_root()
+    _apply_all_patches(root)
+
+
+def _apply_all_patches(root: Path) -> int:
     n = 0
     for py in root.rglob("*.py"):
         if patch_file(py):
@@ -296,6 +311,15 @@ def main() -> None:
     fix_dataloading_init(root)
     fix_graphbolt_init(root)
     fix_dgl_init(root)
+    return n
+
+
+def main() -> None:
+    if "--no-install" not in sys.argv:
+        install_dgl_cuda()
+
+    root = dgl_root()
+    n = _apply_all_patches(root)
 
     for key in list(sys.modules):
         if key == "dgl" or key.startswith("dgl."):

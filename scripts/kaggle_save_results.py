@@ -106,12 +106,18 @@ def copy_branch(
     for models_dir in _model_dirs(data_dir):
         if not models_dir.is_dir():
             continue
-        for f in sorted(models_dir.glob(f"*_{branch}_*.pkl")):
-            dst = out_models / f.name
-            if not dst.exists() or f.stat().st_mtime > dst.stat().st_mtime:
-                shutil.copy2(f, dst)
-            print(f"         model: {f} -> {dst}")
-            copied += 1
+        patterns = (f"*_{branch}_*.pkl", f"*{branch}*.pkl")
+        seen: set[Path] = set()
+        for pat in patterns:
+            for f in sorted(models_dir.glob(pat)):
+                if f in seen or branch not in f.name:
+                    continue
+                seen.add(f)
+                dst = out_models / f.name
+                if not dst.exists() or f.stat().st_mtime > dst.stat().st_mtime:
+                    shutil.copy2(f, dst)
+                print(f"         model: {f} -> {dst}")
+                copied += 1
     if copied == 0:
         print(f"         (không có .pkl cho nhánh {branch})")
 

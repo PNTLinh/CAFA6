@@ -19,21 +19,23 @@ Notebook này dành cho **Kaggle T4** và ưu tiên dùng script có sẵn trong
 
 ## Cell 2 — Cài dependencies và DGL
 
+**Nếu lỗi numpy/scipy hoặc `torch 2.10` / DGL CUDA:** **Restart session** → chạy lại từ Cell 1.
+
 ```python
-!pip install -q packaging fair-esm transformers biopython tqdm scikit-learn pandas scipy networkx requests psutil
-!python /kaggle/working/CAFA6/scripts/install_dgl_kaggle.py
+# Ghim numpy trước (tránh lỗi scipy sau khi pip)
+!pip install -q "numpy>=1.26,<2.4" "scipy>=1.11,<1.16"
+!pip install -q packaging fair-esm transformers biopython tqdm scikit-learn pandas networkx requests psutil
+
+# Cài DGL CUDA (torch 2.6 + dgl 2.5.0+cu124) — KHÔNG chạy train trong cell này
+!python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
 ```
 
-Nếu cell này báo lỗi hoặc torch/dgl bị đổi phiên bản ngoài ý muốn, restart session rồi chạy lại từ đầu.
+Không dùng `pip install dgl` thủ công (thường ra bản CPU).
 
 ## Cell 3 — Kiểm tra CUDA + DGL
 
 ```python
 import torch
-from model.dgl_patch import ensure_dgl_importable
-
-ensure_dgl_importable(verbose=False)
-
 import dgl
 
 g = dgl.graph(([0, 1], [1, 2]))
@@ -41,6 +43,8 @@ if torch.cuda.is_available():
     g = g.to("cuda")
 print("OK", torch.__version__, dgl.__version__, g.device)
 ```
+
+Phải thấy `2.6.0+cu124`, `2.5.0+cu124` (hoặc tương đương CUDA), `device=cuda:0`.
 
 Phải thấy thiết bị dạng `cuda:0`.
 
@@ -84,14 +88,26 @@ OOM → giảm batch: `-batch_size 64`.
 
 ## Cell 6 — Lưu log + model ra Output
 
+Chỉ **cc** và **bp** (mf đã có sẵn):
+
 ```python
-!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf cc bp --skip-train-if-ok
+!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches cc bp
 ```
 
-Hoặc chỉ lưu mf (không train lại):
+Hoặc copy tay (nếu chưa có script):
 
 ```python
-!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf
+!mkdir -p /kaggle/working/log /kaggle/working/save_models
+!cp -v /kaggle/working/CAFA6/log/cc.log /kaggle/working/CAFA6/log/bp.log /kaggle/working/log/
+!cp -v /kaggle/working/CAFA6/save_models/*cc*.pkl /kaggle/working/CAFA6/save_models/*bp*.pkl /kaggle/working/save_models/ 2>/dev/null || true
+!find /kaggle/working -name "*cc*.pkl" -o -name "*bp*.pkl" 2>/dev/null
+!ls -lh /kaggle/working/log/ /kaggle/working/save_models/
+```
+
+Lưu cả 3 nhánh:
+
+```python
+!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf cc bp
 ```
 
 Kỳ vọng:
