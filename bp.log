@@ -1,0 +1,30 @@
+2026-05-23 01:40:42,709 bp INFO device=cuda:0, amp=True, cache_ppi=True, kaggle=True
+2026-05-23 01:40:42,709 bp INFO epochs=2, batch_size=64, dropout=0.1, lr=0.0001, validate_every=4
+2026-05-23 01:40:42,709 bp INFO data_dir=/kaggle/working/CAFA6, cwd=/kaggle/working/CAFA6
+2026-05-23 01:41:38,154 bp INFO #########bp###########
+2026-05-23 01:41:38,154 bp INFO ########start training###########
+2026-05-23 01:41:38,154 bp INFO epoch: 0
+2026-05-23 01:41:43,328 bp INFO Epoch 0/2, step 29/132, loss=0.5728
+2026-05-23 01:41:46,879 bp INFO Epoch 0/2, step 59/132, loss=0.1532
+2026-05-23 01:41:50,363 bp INFO Epoch 0/2, step 89/132, loss=0.1224
+2026-05-23 01:41:53,813 bp INFO Epoch 0/2, step 119/132, loss=0.1237
+2026-05-23 01:41:55,150 bp INFO epoch: 1
+2026-05-23 01:41:59,492 bp INFO Epoch 1/2, step 29/132, loss=0.1151
+2026-05-23 01:42:02,876 bp INFO Epoch 1/2, step 59/132, loss=0.1206
+2026-05-23 01:42:06,367 bp INFO Epoch 1/2, step 89/132, loss=0.1199
+2026-05-23 01:42:09,760 bp INFO Epoch 1/2, step 119/132, loss=0.1224
+2026-05-23 01:42:11,112 bp INFO validating
+2026-05-23 01:42:11,599 bp INFO valid batch 1/38
+2026-05-23 01:42:12,475 bp INFO valid batch 10/38
+2026-05-23 01:42:13,394 bp INFO valid batch 20/38
+2026-05-23 01:42:14,388 bp INFO valid batch 30/38
+2026-05-23 01:42:15,086 bp INFO valid forward done, computing metrics...
+2026-05-23 01:42:34,578 bp INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_bp_64_0.0001_0.1.pkl
+2026-05-23 01:42:34,578 bp INFO ########valid metric###########
+2026-05-23 01:42:34,578 bp INFO epoch=1, train_loss=0.1236, valid_loss=0.1224
+2026-05-23 01:42:34,578 bp INFO threshold=0.3, f_score=0.27213516053592113, auc=0.810607059419172, recall=0.18155968386362972, precision=0.5430478018143754, aupr=0.302960749827064
+2026-05-23 01:42:34,578 bp INFO best_fscore: 0.27213516053592113
+2026-05-23 01:42:34,578 bp INFO best_scores[thresh,fmax,recall,precision,auc]: [0.3, 0.27213516053592113, 0.18155968386362972, 0.5430478018143754, np.float64(0.810607059419172)]
+2026-05-23 01:42:34,603 bp INFO saved final model: /kaggle/working/CAFA6/save_models/final_bp_64_0.0001_0.1.pkl
+2026-05-23 01:42:34,603 bp INFO best_aupr: 0.302960749827064
+2026-05-23 01:42:34,603 bp INFO best_score_dict: {0.3: [0.27213516053592113, 0.18155968386362972, 0.5430478018143754, np.float64(0.810607059419172)]}

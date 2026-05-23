@@ -40,13 +40,22 @@ OPTIONAL_FILES = []
 for branch in ("mf", "bp", "cc"):
     train_path = DIVIDED_DIR / f"{branch}_train_dataset"
     valid_path = DIVIDED_DIR / f"{branch}_valid_dataset"
-    label_path = PROC_DIR    / f"label_{branch}_network"
+    test_path = DIVIDED_DIR / f"{branch}_test_dataset"
+    label_path = PROC_DIR / f"label_{branch}_network"
+    vocab_path = PROC_DIR / f"label_vocab_{branch}.json"
     if train_path.exists() and valid_path.exists():
         REQUIRED_FILES.extend([train_path, valid_path])
+        if test_path.exists():
+            REQUIRED_FILES.append(test_path)
         if label_path.exists():
             REQUIRED_FILES.append(label_path)
         else:
-            print(f"[WARN] Thiếu {label_path} — tiếp tục nhưng training {branch} sẽ fail")
+            print(f"[WARN] Thiếu {label_path} — training {branch} sẽ fail")
+        if vocab_path.exists():
+            REQUIRED_FILES.append(vocab_path)
+        acs_path = PROC_DIR / f"human_{branch.upper()}_ACS.json"
+        if acs_path.exists():
+            REQUIRED_FILES.append(acs_path)
 
 # Cần cho cả 3 branch
 ppi_graph = PROC_DIR / "ppi_graph_global"

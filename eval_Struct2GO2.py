@@ -26,10 +26,14 @@ import logging
 import json
 import matplotlib.pyplot as plt
 
-def create_logger(branch_name):
-    logger = logging.getLogger(branch_name)
+def create_logger(branch_name, data_dir: str):
+    log_dir = os.path.join(data_dir, "log")
+    os.makedirs(log_dir, exist_ok=True)
+    logger = logging.getLogger(f"test_{branch_name}")
+    if logger.handlers:
+        return logger
     handler1 = logging.StreamHandler()
-    handler2 = logging.FileHandler(filename=os.path.join('log','test_'+branch_name+'.log'))
+    handler2 = logging.FileHandler(filename=os.path.join(log_dir, "test_" + branch_name + ".log"))
     logger.setLevel(logging.DEBUG)
     handler1.setLevel(logging.ERROR)
     handler2.setLevel(logging.DEBUG)
@@ -55,7 +59,53 @@ def _load_pickle(path):
         return _CompatUnpickler(handle).load()
 
 # TODO 个人认为，测试集不用再枚举thresh了，直接使用验证集得出的最优thresh即可
-Thresholds = [x/100 for x in range(1,100)]
+Thresholds = [x / 100 for x in range(1, 100)]
+
+_ACS_FILES = {
+    "mf": "human_MF_ACS.json",
+    "cc": "human_CC_ACS.json",
+    "bp": "human_BP_ACS.json",
+}
+
+
+def _resolve_eval_dataset(data_dir: str, branch: str, split: str) -> tuple[str, str]:
+    """Return (path, split_name). Kaggle pack often has valid but not test."""
+    divided = os.path.join(data_dir, "divided_data")
+    order: list[str] = []
+    if split in ("test", "auto"):
+        order.append(f"{branch}_test_dataset")
+    if split in ("valid", "auto"):
+        order.append(f"{branch}_valid_dataset")
+    if split == "train":
+        order.append(f"{branch}_train_dataset")
+    for name in order:
+        path = os.path.join(divided, name)
+        if os.path.isfile(path):
+            split_name = name.replace(f"{branch}_", "").replace("_dataset", "")
+            return path, split_name
+    raise FileNotFoundError(
+        f"No eval dataset under {divided} for branch={branch}, split={split}. "
+        f"Tried: {order}. Re-run kaggle_link_data.py or pack test_dataset in kaggle_data.zip."
+    )
+
+
+def _load_vocab(data_dir: str, branch: str) -> list:
+    proc = os.path.join(data_dir, "proceed_data")
+    vocab_path = os.path.join(proc, f"label_vocab_{branch}.json")
+    if os.path.isfile(vocab_path):
+        with open(vocab_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    acs_path = os.path.join(proc, _ACS_FILES[branch])
+    if os.path.isfile(acs_path):
+        with open(acs_path, "r", encoding="utf-8") as f:
+            protein_labels = json.load(f)
+        terms = sorted({t for terms in protein_labels.values() for t in terms})
+        print(f"[INFO] Built vocab from {acs_path} ({len(terms)} terms)")
+        return terms
+    raise FileNotFoundError(
+        f"Missing label_vocab_{branch}.json and {_ACS_FILES[branch]} under {proc}"
+    )
+
 
 if __name__ == "__main__":
     
@@ -64,26 +114,40 @@ if __name__ == "__main__":
     parser.add_argument('-branch', '--branch',type=str,default='mf')
     parser.add_argument('-thresh', '--thresh',type=float,default=0.71)
     parser.add_argument('-batch', '--batch', type = str, default = '1')
-    parser.add_argument('-model_path', '--model_path', type=str, default='')
+    parser.add_argument("-model_path", "--model_path", type=str, default="")
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="auto",
+        choices=["auto", "test", "valid", "train"],
+        help="auto: test nếu có, không thì valid (phù hợp Kaggle pack)",
+    )
     args = parser.parse_args()
-    
+
     input_thresh = args.thresh
     data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")
-    test_data_path = f'{data_dir}/divided_data/{args.branch}_test_dataset'
-    label_network_path = f'{data_dir}/proceed_data/label_{args.branch}_network'
-    term2idx_path = f'{data_dir}/proceed_data/label_vocab_{args.branch}.json'
-    ppi_graph_path = f'{data_dir}/proceed_data/ppi_graph_global'
-    model_path = args.model_path or f'save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl'
-    
-    logger = create_logger(args.branch)
+    test_data_path, eval_split = _resolve_eval_dataset(data_dir, args.branch, args.split)
+    label_network_path = f"{data_dir}/proceed_data/label_{args.branch}_network"
+    ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
+    model_path = args.model_path or f"{data_dir}/save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl"
+    if not os.path.isabs(model_path) and not os.path.isfile(model_path):
+        alt = os.path.join(data_dir, model_path)
+        if os.path.isfile(alt):
+            model_path = alt
+
+    result_dir = os.path.join(data_dir, "test_result")
+    os.makedirs(result_dir, exist_ok=True)
+
+    logger = create_logger(args.branch, data_dir)
+    logger.info(f"eval split={eval_split}, dataset={test_data_path}")
 
     import __main__
+
     __main__.MyDataSet = MyDataSet
 
     test_dataset = _load_pickle(test_data_path)
     label_network = _load_pickle(label_network_path)
-    with open(term2idx_path,'r') as f:
-        idx2term = json.load(f)
+    idx2term = _load_vocab(data_dir, args.branch)
     ppi_graph = _load_pickle(ppi_graph_path)
     label_network = label_network.to(device)
     model = torch.load(model_path, map_location=device)
@@ -139,20 +203,20 @@ if __name__ == "__main__":
     temp = {}
     temp["pred"] = pred
     temp["actual"] = actual
-    with open('test_result/'+args.branch+args.batch+"_pred_actual.pkl",'wb') as f:
+    with open(os.path.join(result_dir, args.branch + args.batch + "_pred_actual.pkl"), "wb") as f:
         pickle.dump(temp, f)
-        
+
     for i in range(len(pred)):
         protein = protein_list[i]
         result[protein] = []
         y_ = pred[i]
         y = actual[i]
-        for j,x in enumerate(idx2term):
+        for j, x in enumerate(idx2term):
             # 寻找新预测出来的标签
-            if y[j] < 1. and y_[j] > input_thresh:
-                result[protein].append(x+f" {y_[j]:.5f}")
-    with open('test_result/'+args.branch+'_result.json','w') as f:
-        json.dump(result,f,indent=4)
+            if y[j] < 1.0 and y_[j] > input_thresh:
+                result[protein].append(x + f" {y_[j]:.5f}")
+    with open(os.path.join(result_dir, args.branch + "_result.json"), "w") as f:
+        json.dump(result, f, indent=4)
         
     t_loss /= len(test_dataloader)
     fpr, tpr, th = roc_curve(np.array(actual).flatten(), np.array(pred).flatten(), pos_label=1)
@@ -183,7 +247,7 @@ if __name__ == "__main__":
     plt.legend(loc="lower right")
 
     # save ROC pic
-    roc_curve_path = os.path.join("test_result", f"{args.branch}_roc_curve.png")
+    roc_curve_path = os.path.join(result_dir, f"{args.branch}_roc_curve.png")
     plt.savefig(roc_curve_path)
     plt.show()
     

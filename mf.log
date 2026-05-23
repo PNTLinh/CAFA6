@@ -1,0 +1,33 @@
+2026-05-23 01:26:24,157 mf INFO device=cuda:0, amp=True, cache_ppi=True, kaggle=True
+2026-05-23 01:26:24,158 mf INFO epochs=2, batch_size=64, dropout=0.1, lr=0.0001, validate_every=5
+2026-05-23 01:26:24,158 mf INFO data_dir=/kaggle/working/CAFA6, cwd=/kaggle/working/CAFA6
+2026-05-23 01:27:25,406 mf INFO #########mf###########
+2026-05-23 01:27:25,406 mf INFO ########start training###########
+2026-05-23 01:27:25,406 mf INFO epoch: 0
+2026-05-23 01:27:32,048 mf INFO Epoch 0/2, step 29/169, loss=0.6052
+2026-05-23 01:27:36,324 mf INFO Epoch 0/2, step 59/169, loss=0.0998
+2026-05-23 01:27:39,622 mf INFO Epoch 0/2, step 89/169, loss=0.0857
+2026-05-23 01:27:42,994 mf INFO Epoch 0/2, step 119/169, loss=0.0661
+2026-05-23 01:27:46,422 mf INFO Epoch 0/2, step 149/169, loss=0.0636
+2026-05-23 01:27:48,498 mf INFO epoch: 1
+2026-05-23 01:27:51,947 mf INFO Epoch 1/2, step 29/169, loss=0.0742
+2026-05-23 01:27:55,372 mf INFO Epoch 1/2, step 59/169, loss=0.0624
+2026-05-23 01:27:58,798 mf INFO Epoch 1/2, step 89/169, loss=0.0718
+2026-05-23 01:28:02,179 mf INFO Epoch 1/2, step 119/169, loss=0.0618
+2026-05-23 01:28:05,605 mf INFO Epoch 1/2, step 149/169, loss=0.0593
+2026-05-23 01:28:07,715 mf INFO validating
+2026-05-23 01:28:08,256 mf INFO valid batch 1/49
+2026-05-23 01:28:09,111 mf INFO valid batch 10/49
+2026-05-23 01:28:10,012 mf INFO valid batch 20/49
+2026-05-23 01:28:10,879 mf INFO valid batch 30/49
+2026-05-23 01:28:11,781 mf INFO valid batch 40/49
+2026-05-23 01:28:12,521 mf INFO valid forward done, computing metrics...
+2026-05-23 01:28:24,446 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-23 01:28:24,446 mf INFO ########valid metric###########
+2026-05-23 01:28:24,447 mf INFO epoch=1, train_loss=0.0654, valid_loss=0.0647
+2026-05-23 01:28:24,447 mf INFO threshold=0.7, f_score=0.48129836028939355, auc=0.8634717292069222, recall=0.3245921404619268, precision=0.9305465543313891, aupr=0.4513574742239372
+2026-05-23 01:28:24,447 mf INFO best_fscore: 0.48129836028939355
+2026-05-23 01:28:24,447 mf INFO best_scores[thresh,fmax,recall,precision,auc]: [0.7, 0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)]
+2026-05-23 01:28:24,468 mf INFO saved final model: /kaggle/working/CAFA6/save_models/final_mf_64_0.0001_0.1.pkl
+2026-05-23 01:28:24,468 mf INFO best_aupr: 0.4513574742239372
+2026-05-23 01:28:24,468 mf INFO best_score_dict: {0.3: [0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)], 0.4: [0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)], 0.5: [0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)], 0.6: [0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)], 0.7: [0.48129836028939355, 0.3245921404619268, 0.9305465543313891, np.float64(0.8634717292069222)]}
