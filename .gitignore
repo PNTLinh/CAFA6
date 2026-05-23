@@ -37,8 +37,6 @@ protein_sequence
 
 # Raw / intermediate (nếu copy vào repo)
 raw_data/
-*.pkl
-*.pickle
 
 # OS
 Thumbs.db
