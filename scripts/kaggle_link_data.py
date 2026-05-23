@@ -73,13 +73,20 @@ def _validate_pickle(path: Path, min_bytes: int = 1024) -> None:
 def main() -> None:
     import argparse
 
+    on_kaggle = os.environ.get("KAGGLE_KERNEL_RUN_TYPE") is not None
+    default_copy = ["all"] if on_kaggle else []
+
     parser = argparse.ArgumentParser(description="Link or repair CAFA6 Kaggle data")
     parser.add_argument(
         "--copy-splits",
         nargs="*",
-        default=[],
+        default=default_copy,
         choices=["mf", "cc", "bp", "all"],
+<<<<<<< HEAD
         help="Copy divided_data vào /kaggle/working (tốn ~30GB). Mặc định: symlink từ input.",
+=======
+        help="Copy divided_data pickles locally (default on Kaggle: all — tránh symlink/EOF)",
+>>>>>>> 33b7338893fcef31c92562af87b883b6837df98b
     )
     args = parser.parse_args()
 
