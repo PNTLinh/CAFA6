@@ -20,6 +20,14 @@ import os
 import logging
 import json
 
+
+def _load_model_checkpoint(model_path, device):
+    """Load trusted full-model checkpoints across torch versions."""
+    try:
+        return torch.load(model_path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(model_path, map_location=device)
+
 def create_logger(branch_name):
     logger = logging.getLogger(branch_name)
     handler1 = logging.StreamHandler()
@@ -65,7 +73,7 @@ if __name__ == "__main__":
         idx2term = term2idx.keys()
     label_network = label_network.to(device)
     label_topo_order_list = dgl.topological_nodes_generator(label_network)
-    model = torch.load(model_path)
+    model = _load_model_checkpoint(model_path, device)
 
     batch_size = 64
     test_dataloader = GraphDataLoader(dataset=test_dataset, batch_size = batch_size, drop_last = False, shuffle = False)

@@ -27,6 +27,16 @@ import logging
 import json
 import matplotlib.pyplot as plt
 
+
+def _load_model_checkpoint(model_path, device):
+    """Load trusted full-model checkpoints across torch versions."""
+    try:
+        # PyTorch>=2.6 defaults to weights_only=True, but this project saves full model objects.
+        return torch.load(model_path, map_location=device, weights_only=False)
+    except TypeError:
+        # Older torch versions do not support weights_only argument.
+        return torch.load(model_path, map_location=device)
+
 def create_logger(branch_name, data_dir: str):
     log_dir = os.path.join(data_dir, "log")
     os.makedirs(log_dir, exist_ok=True)
@@ -157,7 +167,7 @@ if __name__ == "__main__":
     if not idx2term:
         idx2term = [f"GO_TERM_{i:05d}" for i in range(label_network.num_nodes())]
         print(f"[WARN] Using placeholder vocabulary with {len(idx2term)} terms")
-    model = torch.load(model_path, map_location=device)
+    model = _load_model_checkpoint(model_path, device)
     model = model.to(device)
     ppi_graph = ppi_graph.to(device)
     ppi_node_emb = None
