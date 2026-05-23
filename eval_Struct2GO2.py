@@ -27,6 +27,7 @@ import logging
 import json
 import matplotlib.pyplot as plt
 import sys
+from pathlib import Path
 
 
 def _argv_has(*names: str) -> bool:
@@ -85,6 +86,23 @@ _ACS_FILES = {
     "cc": "human_CC_ACS.json",
     "bp": "human_BP_ACS.json",
 }
+
+
+def _resolve_data_dir() -> str:
+    """Pick the first usable CAFA6 data root for local or Kaggle runs."""
+    candidates = []
+    env_data_dir = os.environ.get("DATA_DIR")
+    if env_data_dir:
+        candidates.append(Path(env_data_dir))
+    candidates.append(Path(__file__).resolve().parent)
+    candidates.append(Path.cwd())
+    candidates.append(Path("D:/CAFA6"))
+
+    for candidate in candidates:
+        if (candidate / "divided_data").exists() and (candidate / "proceed_data").exists():
+            return str(candidate)
+
+    return env_data_dir or str(Path(__file__).resolve().parent)
 
 
 def _resolve_eval_dataset(data_dir: str, branch: str, split: str) -> tuple[str, str]:
@@ -244,7 +262,7 @@ if __name__ == "__main__":
             args.thresh = _BASELINE_EVAL_THRESH.get(args.branch, 0.71)
 
     input_thresh = args.thresh
-    data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")
+    data_dir = _resolve_data_dir()
     test_data_path, eval_split = _resolve_eval_dataset(data_dir, args.branch, args.split)
     label_network_path = f"{data_dir}/proceed_data/label_{args.branch}_network"
     ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
