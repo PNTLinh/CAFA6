@@ -121,6 +121,20 @@ def _load_vocab(data_dir: str, branch: str) -> list:
     return []
 
 
+def _align_vocab_to_output(idx2term: list, output_dim: int) -> list:
+    """Make vocabulary length match model output dimension."""
+    terms = list(idx2term)
+    if len(terms) == output_dim:
+        return terms
+    if len(terms) > output_dim:
+        print(f"[WARN] Vocab has {len(terms)} terms but model outputs {output_dim}; truncating vocab")
+        return terms[:output_dim]
+    print(f"[WARN] Vocab has {len(terms)} terms but model outputs {output_dim}; padding placeholders")
+    start = len(terms)
+    terms.extend([f"GO_TERM_{i:05d}" for i in range(start, output_dim)])
+    return terms
+
+
 if __name__ == "__main__":
     
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -214,7 +228,12 @@ if __name__ == "__main__":
     # 为了保持可控，这里使用传入的thresh来确定最终分类结果
     assert len(pred) == len(actual)
     assert len(pred) == len(protein_list)
-    assert len(pred[0]) == len(idx2term)
+    if not pred:
+        raise RuntimeError("No predictions were generated. Check eval dataset and dataloader.")
+
+    output_dim = len(pred[0])
+    idx2term = _align_vocab_to_output(idx2term, output_dim)
+
     result = {}
     
     temp = {}
@@ -228,7 +247,8 @@ if __name__ == "__main__":
         result[protein] = []
         y_ = pred[i]
         y = actual[i]
-        for j, x in enumerate(idx2term):
+        for j in range(output_dim):
+            x = idx2term[j]
             # 寻找新预测出来的标签
             if y[j] < 1.0 and y_[j] > input_thresh:
                 result[protein].append(x + f" {y_[j]:.5f}")
