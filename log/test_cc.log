@@ -20,3 +20,10 @@
 2026-05-23 07:31:39,337 test_cc INFO loss: 53.37796113755968, thresh: 0.27, f_score 0.572245746972736
 2026-05-23 07:31:39,338 test_cc INFO auc 0.9327301468120514, recall 0.5491160536070716, precision 0.5974096478982472,aupr 0.6116201829003215
 2026-05-23 07:31:39,808 test_cc INFO ROC curve saved to /kaggle/working/CAFA6/test_result/cc_roc_curve.png
+2026-05-23 12:10:34,486 test_cc INFO eval split=test, dataset=/kaggle/working/CAFA6/divided_data/cc_test_dataset, baseline_parity=False, use_ppi=True, thresh=0.71, model=/kaggle/working/CAFA6/save_models/bestmodel_cc_96_0.0001_0.2.pkl
+2026-05-23 12:20:22,453 test_cc INFO eval split=test, dataset=/kaggle/working/CAFA6/divided_data/cc_test_dataset, baseline_parity=False, use_ppi=True, thresh=0.71, model=/kaggle/working/CAFA6/save_models/bestmodel_cc_64_0.0001_0.3.pkl
+2026-05-23 12:20:38,173 test_cc INFO #########cc###########
+2026-05-23 12:20:38,173 test_cc INFO ########start testing###########
+2026-05-23 12:21:47,904 test_cc INFO loss: 53.015777842203775, thresh: 0.28, f_score 0.5947536882381075
+2026-05-23 12:21:47,905 test_cc INFO auc 0.9495348946549685, recall 0.5762047333903622, precision 0.6145366076180339,aupr 0.6452995487681825
+2026-05-23 12:21:48,368 test_cc INFO ROC curve saved to /kaggle/working/CAFA6/test_result/cc_roc_curve.png

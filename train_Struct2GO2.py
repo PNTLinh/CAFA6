@@ -75,8 +75,20 @@ class _CompatUnpickler(pickle.Unpickler):
 
 
 def _load_pickle(path: str):
-    with open(path, "rb") as handle:
-        return _CompatUnpickler(handle).load()
+    file_path = Path(path)
+    if not file_path.is_file():
+        raise FileNotFoundError(f"Missing dataset pickle: {file_path}")
+    if file_path.stat().st_size == 0:
+        raise RuntimeError(
+            f"Dataset pickle is empty: {file_path}. Rebuild divided_data or re-run kaggle_link_data.py."
+        )
+    try:
+        with open(file_path, "rb") as handle:
+            return _CompatUnpickler(handle).load()
+    except EOFError as exc:
+        raise RuntimeError(
+            f"Dataset pickle is truncated or corrupted: {file_path}. Rebuild divided_data or re-run kaggle_link_data.py."
+        ) from exc
 Thresholds = [x / 100 for x in range(1, 100)]
 
 
