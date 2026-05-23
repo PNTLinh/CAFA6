@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from dgl.dataloading import GraphDataLoader
+from torch.utils.data import DataLoader
 from sklearn.metrics import auc, roc_curve
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
@@ -254,8 +254,8 @@ def main():
 
     collate_fn = partial(_train_collate, seq_dim=args.seq_dim, label_dim=labels_num)
 
-    train_dataloader = GraphDataLoader(dataset=train_dataset, shuffle=True, collate_fn=collate_fn, **loader_kw)
-    valid_dataloader = GraphDataLoader(dataset=valid_dataset, shuffle=False, collate_fn=collate_fn, **loader_kw)
+    train_dataloader = DataLoader(dataset=train_dataset, shuffle=True, collate_fn=collate_fn, **loader_kw)
+    valid_dataloader = DataLoader(dataset=valid_dataset, shuffle=False, collate_fn=collate_fn, **loader_kw)
 
     model = SAGNetworkHierarchical(
         56,
