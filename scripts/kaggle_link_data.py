@@ -8,6 +8,28 @@ from pathlib import Path
 
 
 def find_cafa6_data_root(input_root: Path) -> Path:
+    def has_raw_split_sources(root: Path) -> bool:
+        proc = root / "proceed_data"
+        required = (
+            proc / "emb_graph_mf",
+            proc / "emb_seq_feature_mf",
+            proc / "emb_label_mf",
+            proc / "ppi_graph_global",
+        )
+        return all(path.exists() for path in required)
+
+    local_candidates = [Path.cwd(), Path(__file__).resolve().parents[1]]
+    for candidate in local_candidates:
+        if has_raw_split_sources(candidate):
+            return candidate
+
+    for ppi in input_root.rglob("ppi_graph_global"):
+        if not ppi.is_file():
+            continue
+        root = ppi.parent.parent
+        if (root / "divided_data" / "mf_train_dataset").exists() and has_raw_split_sources(root):
+            return root
+
     for ppi in input_root.rglob("ppi_graph_global"):
         if not ppi.is_file():
             continue
