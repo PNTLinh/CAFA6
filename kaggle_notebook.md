@@ -1,12 +1,10 @@
-# Kaggle — CAFA6
+# Kaggle notebook — copy từng cell
 
-Notebook này dành cho **Kaggle T4** và ưu tiên dùng script có sẵn trong repo để tránh lỗi thư viện `torchdata`/`dgl`.
+Bật **GPU T4** + **Internet**. Nếu lỗi DGL/numpy → **Restart session** → chạy lại từ Cell 1.
 
-## Trước khi chạy
+Gắn dataset `cafa6-data` (từ `pack_for_kaggle.py`) vào notebook.
 
-- Bật **GPU T4** trong Kaggle Notebook.
-- Bật **Internet**.
-- Nếu trước đó bạn đã thử cài `torchdata` hoặc `dgl` thủ công, hãy **Restart session** trước khi chạy lại notebook này.
+---
 
 ## Cell 1 — Clone repo
 
@@ -17,22 +15,21 @@ Notebook này dành cho **Kaggle T4** và ưu tiên dùng script có sẵn trong
 %cd CAFA6
 ```
 
-## Cell 2 — Cài dependencies và DGL
+*(Đã clone rồi, chỉ cập nhật code: `%cd /kaggle/working/CAFA6` rồi `!git pull`)*
 
-**Nếu lỗi numpy/scipy hoặc `torch 2.10` / DGL CUDA:** **Restart session** → chạy lại từ Cell 1.
+---
+
+## Cell 2 — Cài thư viện + DGL CUDA
 
 ```python
-# Ghim numpy trước (tránh lỗi scipy sau khi pip)
 !pip install -q "numpy>=1.26,<2.4" "scipy>=1.11,<1.16"
 !pip install -q packaging fair-esm transformers biopython tqdm scikit-learn pandas networkx requests psutil
-
-# Cài DGL CUDA (torch 2.6 + dgl 2.5.0+cu124) — KHÔNG chạy train trong cell này
 !python /kaggle/working/CAFA6/scripts/kaggle_fix_dgl.py
 ```
 
-Không dùng `pip install dgl` thủ công (thường ra bản CPU).
+---
 
-## Cell 3 — Kiểm tra CUDA + DGL
+## Cell 3 — Kiểm tra GPU
 
 ```python
 import torch
@@ -44,91 +41,77 @@ if torch.cuda.is_available():
 print("OK", torch.__version__, dgl.__version__, g.device)
 ```
 
-Phải thấy `2.6.0+cu124`, `2.5.0+cu124` (hoặc tương đương CUDA), `device=cuda:0`.
+---
 
-Phải thấy thiết bị dạng `cuda:0`.
-
-## Cell 4 — Nối dữ liệu Kaggle
-
-Upload dataset đã pack bằng `pack_for_kaggle.py`, sau đó chạy:
+## Cell 4 — Nối dữ liệu
 
 ```python
 !python /kaggle/working/CAFA6/scripts/kaggle_link_data.py
+!ls /kaggle/working/CAFA6/proceed_data/ppi_graph_global
+!ls /kaggle/working/CAFA6/divided_data/*_train_dataset
 ```
 
-Script này sẽ tự tìm `proceed_data/ppi_graph_global` và `divided_data/*` trong `/kaggle/input` rồi symlink vào `/kaggle/working/CAFA6`.
+---
 
-## Cell 5 — Train (~30 phút / nhánh)
+## Cell 5 — Train CC → MF → BP, lưu từng nhánh, cập nhật zip
 
-Preset `--kaggle`: **mf/cc** 5 epoch, **bp** 4 epoch, `hid_dim=256`, validate 1 lần ở epoch cuối (~30 phút/nhánh trên T4).
-
-**So sánh công bằng với paper (Table 1):** mặc định repo đã bật `--baseline-parity` + **PPI**; trên Kaggle dùng `--kaggle` để train nhanh (~30p/nhánh). Xem [`baseline/FAIR_COMPARISON.md`](baseline/FAIR_COMPARISON.md).
+~1–2 giờ tổng (BP chậm nhất). Sau mỗi nhánh zip được ghi lại tại `/kaggle/working/cafa6_output.zip`.
 
 ```python
 %env DATA_DIR=/kaggle/working/CAFA6
 %env DGL_CUDA=1
 
-import __main__
-from data_processing.divide_data import MyDataSet
-__main__.MyDataSet = MyDataSet
-
-%cd /kaggle/working/CAFA6
-!python train_Struct2GO2.py -branch mf --kaggle
-!python train_Struct2GO2.py -branch cc --kaggle
-!python train_Struct2GO2.py -branch bp --kaggle -dropout 0.1
+!python /kaggle/working/CAFA6/scripts/kaggle_run_branches.py
 ```
 
-Nếu **mf đã train xong** (log có `saved final` hoặc `best_fscore`), chỉ train cc + bp:
+**MF đã train xong** (chỉ chạy cc + bp, vẫn copy mf cũ vào zip nếu có):
 
 ```python
-# Bỏ qua dòng train mf ở trên, chỉ chạy:
-!python train_Struct2GO2.py -branch cc --kaggle
-!python train_Struct2GO2.py -branch bp --kaggle -dropout 0.1
+%env DATA_DIR=/kaggle/working/CAFA6
+%env DGL_CUDA=1
+
+!python /kaggle/working/CAFA6/scripts/kaggle_run_branches.py --branches cc mf bp --skip mf
 ```
 
-OOM → giảm batch: `-batch_size 64`.
-
-## Cell 6 — Lưu log + model ra Output
-
-Chỉ **cc** và **bp** (mf đã có sẵn):
+**OOM** → thêm `-batch_size 64`:
 
 ```python
-!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches cc bp
+!python /kaggle/working/CAFA6/scripts/kaggle_run_branches.py -batch_size 64
 ```
 
-Hoặc copy tay (nếu chưa có script):
+**Chỉ train, không eval** (nhanh hơn):
 
 ```python
-!mkdir -p /kaggle/working/log /kaggle/working/save_models
-!cp -v /kaggle/working/CAFA6/log/cc.log /kaggle/working/CAFA6/log/bp.log /kaggle/working/log/
-!cp -v /kaggle/working/CAFA6/save_models/*cc*.pkl /kaggle/working/CAFA6/save_models/*bp*.pkl /kaggle/working/save_models/ 2>/dev/null || true
-!find /kaggle/working -name "*cc*.pkl" -o -name "*bp*.pkl" 2>/dev/null
-!ls -lh /kaggle/working/log/ /kaggle/working/save_models/
+!python /kaggle/working/CAFA6/scripts/kaggle_run_branches.py --no-eval
 ```
 
-Lưu cả 3 nhánh:
+---
+
+## Cell 6 — Kiểm tra Output
 
 ```python
-!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf cc bp
-```
-
-Kỳ vọng:
-
-```
-/kaggle/working/log/mf.log  cc.log  bp.log
-/kaggle/working/save_models/bestmodel_*.pkl  final_*.pkl
-```
-
-Zip download:
-
-```python
-!cd /kaggle/working && zip -r cafa6_output.zip log save_models
 !ls -lh /kaggle/working/cafa6_output.zip
+!ls -lh /kaggle/working/log/
+!ls -lh /kaggle/working/save_models/
+!ls -lh /kaggle/working/test_result/ 2>/dev/null || echo "(chưa eval)"
 ```
 
-## Ghi chú nhanh
+---
 
-- Preset `--kaggle` ~30p/nhánh: `amp`, cache PPI, ít ngưỡng F-score (9).
-- `-epochs`, `-batch_size`, … trên CLI vẫn được giữ nếu bạn truyền tay.
-- `DATA_DIR=/kaggle/working/CAFA6` — checkpoint luôn lưu vào `{DATA_DIR}/save_models/`.
-- Thứ tự: clone → install_dgl_kaggle.py → verify → kaggle_link_data.py → train → kaggle_save_results.py.
+## Cell 7 — Tải zip về máy local
+
+```python
+from IPython.display import FileLink, display
+
+display(FileLink("/kaggle/working/cafa6_output.zip"))
+```
+
+Bấm link **cafa6_output.zip** trong output cell, hoặc **Save Version → Save & Run All** rồi tải từ tab **Output** bên phải.
+
+Nội dung zip:
+
+```
+log/mf.log  log/cc.log  log/bp.log
+save_models/bestmodel_*.pkl  final_*.pkl
+test_result/   (nếu Cell 5 có chạy eval)
+```

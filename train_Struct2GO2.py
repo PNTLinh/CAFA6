@@ -6,6 +6,7 @@ import sys
 import warnings
 from functools import partial
 from typing import Any
+from pathlib import Path
 
 # Patch DGL on disk before import (Kaggle Py3.12 / torchdata break)
 from model.dgl_patch import ensure_dgl_importable
@@ -77,6 +78,28 @@ def _load_pickle(path: str):
     with open(path, "rb") as handle:
         return _CompatUnpickler(handle).load()
 Thresholds = [x / 100 for x in range(1, 100)]
+
+
+def _resolve_data_dir() -> str:
+    env_data_dir = os.environ.get("DATA_DIR")
+    candidates = []
+    if env_data_dir:
+        candidates.append(Path(env_data_dir))
+
+    script_dir = Path(__file__).resolve().parent
+    candidates.extend(
+        [
+            script_dir,
+            Path.cwd(),
+            script_dir.parent,
+        ]
+    )
+
+    for candidate in candidates:
+        if (candidate / "divided_data").is_dir() and (candidate / "proceed_data").is_dir():
+            return str(candidate)
+
+    return str(Path(env_data_dir) if env_data_dir else script_dir)
 
 
 def _ckpt_path(data_dir: str, args: argparse.Namespace, tag: str) -> str:
@@ -269,7 +292,7 @@ def main():
     if use_cuda:
         torch.backends.cudnn.benchmark = True
 
-    data_dir = os.environ.get("DATA_DIR", "D:/CAFA6")
+    data_dir = _resolve_data_dir()
     train_data_path = f"{data_dir}/divided_data/{args.branch}_train_dataset"
     valid_data_path = f"{data_dir}/divided_data/{args.branch}_valid_dataset"
     label_network_path = f"{data_dir}/proceed_data/label_{args.branch}_network"

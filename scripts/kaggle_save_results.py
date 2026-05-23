@@ -9,6 +9,7 @@ import argparse
 import re
 import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 
@@ -122,6 +123,53 @@ def copy_branch(
         print(f"         (không có .pkl cho nhánh {branch})")
 
 
+def copy_test_result(branch: str, data_dir: Path, out_test: Path) -> None:
+    src_dir = data_dir / "test_result"
+    if not src_dir.is_dir():
+        return
+    out_test.mkdir(parents=True, exist_ok=True)
+    for pattern in (
+        f"{branch}_result.json",
+        f"{branch}*_pred_actual.pkl",
+        f"{branch}_roc_curve.png",
+    ):
+        for f in src_dir.glob(pattern):
+            dst = out_test / f.name
+            shutil.copy2(f, dst)
+            print(f"         test_result: {f.name} -> {dst}")
+    log_src = data_dir / "log" / f"test_{branch}.log"
+    if log_src.is_file():
+        dst = out_test / f"test_{branch}.log"
+        shutil.copy2(log_src, dst)
+
+
+def make_zip(
+    out_log: Path,
+    out_models: Path,
+    out_test: Path,
+    zip_path: Path,
+    data_dir: Path | None = None,
+) -> None:
+    """Pack log/, save_models/, test_result/ into one zip for Kaggle download."""
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for folder, arc_prefix in (
+            (out_log, "log"),
+            (out_models, "save_models"),
+            (out_test, "test_result"),
+        ):
+            if not folder.is_dir():
+                continue
+            for f in sorted(folder.rglob("*")):
+                if f.is_file():
+                    zf.write(f, arcname=f"{arc_prefix}/{f.relative_to(folder).as_posix()}")
+        if data_dir is not None:
+            manifest = data_dir / "log" / "_kaggle_manifest.txt"
+            if manifest.is_file():
+                zf.write(manifest, arcname="log/_kaggle_manifest.txt")
+    print(f"[zip] wrote {zip_path} ({zip_path.stat().st_size / 1e6:.1f} MB)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Lưu log/model CAFA6 ra Kaggle Output")
     parser.add_argument(
@@ -140,6 +188,16 @@ def main() -> None:
         action="store_true",
         help="In danh sách nhánh status=ok (chỉ copy, không gợi ý train lại)",
     )
+    parser.add_argument(
+        "--zip",
+        action="store_true",
+        help="Tạo /kaggle/working/cafa6_output.zip sau khi copy",
+    )
+    parser.add_argument(
+        "--zip-name",
+        default="cafa6_output.zip",
+        help="Tên file zip (trong /kaggle/working/)",
+    )
     args = parser.parse_args()
 
     import os
@@ -147,6 +205,7 @@ def main() -> None:
     data_dir = Path(args.data_dir or os.environ.get("DATA_DIR", "/kaggle/working/CAFA6"))
     out_log = Path("/kaggle/working/log")
     out_models = Path("/kaggle/working/save_models")
+    out_test = Path("/kaggle/working/test_result")
 
     print("DATA_DIR:", data_dir)
     ok_skip: list[str] = []
@@ -157,6 +216,11 @@ def main() -> None:
             if info["status"] == "ok":
                 ok_skip.append(branch)
         copy_branch(branch, data_dir, out_log, out_models)
+        copy_test_result(branch, data_dir, out_test)
+
+    if args.zip:
+        zip_path = Path("/kaggle/working") / args.zip_name
+        make_zip(out_log, out_models, out_test, zip_path, data_dir)
 
     print("\n=== Output ===")
     if out_log.is_dir():
