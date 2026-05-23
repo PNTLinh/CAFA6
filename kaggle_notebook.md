@@ -154,6 +154,15 @@ else:
 !python /kaggle/working/CAFA6/scripts/kaggle_run_branches.py --no-eval
 ```
 
+**Eval riêng nhánh CC** (nếu muốn chạy trực tiếp thay vì qua `kaggle_run_branches.py`):
+
+```python
+%env DATA_DIR=/kaggle/working/CAFA6
+%env DGL_CUDA=1
+
+!python /kaggle/working/CAFA6/eval_Struct2GO2.py -branch cc --no-baseline-parity --split auto
+```
+
 ---
 
 ## Cell 6 — Kiểm tra Output
