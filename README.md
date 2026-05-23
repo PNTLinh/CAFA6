@@ -590,11 +590,13 @@ Preset `--kaggle` bật sẵn:
 
 | Tối ưu | Giá trị |
 |---|---|
-| `batch_size` | 96 |
-| `hid_dim` / `num_convs` | 384 / 4 |
+| `batch_size` | 96 (mf/cc), 80 (bp) |
+| `hid_dim` / `num_convs` | 256 / 3 |
 | Mixed precision (`--amp`) | Bật |
 | Cache PPI graph / epoch | Bật (tránh chạy GraphSAGE mỗi batch) |
-| `epochs` | 20 |
+| `epochs` | 5 (mf/cc), 4 (bp) |
+| `validate_every` | = số epoch (validate 1 lần cuối) |
+| F-max thresholds | 5 (0.3–0.7) |
 | `num_workers` | 2 |
 
 Xem hướng dẫn đầy đủ từng bước upload data → notebook tại [mục 8](#8-huấn-luyện-trên-kaggle-t4-chi-tiết).
@@ -670,8 +672,8 @@ Sơ đồ chi tiết (phong cách paper, 3 nhánh + Cross-Attention):
 | Thành phần | Local mặc định | Preset `--kaggle` (T4) |
 |---|---|---|
 | `in_dim` (residue feature) | 56 = onehot(26) + node2vec(30) | 56 |
-| `hid_dim` | 256 | 384 |
-| `num_convs` | 3 | 4 |
+| `hid_dim` | 256 | 256 |
+| `num_convs` | 3 | 3 |
 | `pool_ratio` | 0.5 | 0.5 |
 | `seq_dim` / `ppi_in_dim` | 640 (ESM-2 150M) | auto từ data |
 | `ppi_out_dim` | 128 | 128 |
@@ -866,11 +868,11 @@ Commit notebook (**Save & Run All**) → tab **Output** để tải `bestmodel_*
 
 ### 8.4 Ước lượng thời gian & VRAM (T4 16GB)
 
-| Nhánh | ~Thời gian (`--kaggle`, 20 epoch) | Ghi chú |
+| Nhánh | ~Thời gian (`--kaggle`) | Ghi chú |
 |---|---|---|
-| MF | 25–45 phút | ~400–500 labels |
-| CC | 25–45 phút | tương tự MF |
-| BP | 60–90 phút | ~700 labels, VRAM cao hơn |
+| MF | ~25–35 phút | 5 epoch, validate cuối |
+| CC | ~25–35 phút | tương tự MF |
+| BP | ~28–38 phút | 4 epoch, batch 96 |
 
 Nếu OOM: `-batch_size 64` hoặc bỏ `--kaggle` và dùng `-hid_dim 256 -num_convs 3`.
 

@@ -88,19 +88,29 @@ def resolve_device(force_cpu: bool = False) -> torch.device:
     return torch.device("cpu")
 
 
+def _argv_has(*names: str) -> bool:
+    return any(n in sys.argv for n in names)
+
+
 def apply_kaggle_preset(args: argparse.Namespace) -> None:
-    """Preset tối ưu cho Kaggle GPU T4 (16GB)."""
-    args.batch_size = 96
-    args.epochs = 20
+    """Preset ~30 phút/nhánh trên Kaggle T4 (validate 1 lần ở epoch cuối)."""
+    args.hid_dim = 256
+    args.num_convs = 3
+    args.ppi_out_dim = 96
     args.num_workers = 2
-    args.hid_dim = 384
-    args.num_convs = 4
-    args.ppi_out_dim = 128
     args.amp = True
     args.cache_ppi = True
-    args.validate_every = 2
     global Thresholds
-    Thresholds = [x / 100 for x in range(5, 100, 5)]  # 19 thresholds (faster than 99 on Kaggle)
+    Thresholds = [0.3, 0.4, 0.5, 0.6, 0.7]  # 5 ngưỡng — giảm thời gian tính F-max
+
+    if args.branch == "bp":
+        args.batch_size = 96
+        args.epochs = 4
+        args.validate_every = 4
+    else:
+        args.batch_size = 96
+        args.epochs = 5
+        args.validate_every = 5
 
 
 def labels_to_device(labels: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -117,7 +127,7 @@ def main():
     parser.add_argument("-dropout", "--dropout", type=float, default=0.3)
     parser.add_argument("-branch", "--branch", type=str, default="mf", choices=["bp", "mf", "cc"])
     parser.add_argument("-labels_num", "--labels_num", type=int, default=328)
-    parser.add_argument("-epochs", "--epochs", type=int, default=10)
+    parser.add_argument("-epochs", "--epochs", type=int, default=3)
     parser.add_argument("-hid_dim", "--hid_dim", type=int, default=256)
     parser.add_argument("-num_convs", "--num_convs", type=int, default=3)
     parser.add_argument("-seq_dim", "--seq_dim", type=int, default=640)
@@ -131,14 +141,34 @@ def main():
     parser.set_defaults(cache_ppi=True)
     parser.add_argument("--cpu", action="store_true", help="Bắt buộc train trên CPU")
     parser.add_argument("--kaggle", action="store_true",
-                        help="Preset T4: batch=96, hid=384, conv=4, amp, cache PPI")
+                        help="Preset T4 ~30p/nhánh: mf/cc 5 epoch, bp 4 epoch, hid=256, amp")
     args = parser.parse_args()
 
     if args.kaggle:
-        user_batch = args.batch_size
+        cli_overrides = {
+            "batch_size": args.batch_size,
+            "epochs": args.epochs,
+            "dropout": args.dropout,
+            "learningrate": args.learningrate,
+            "hid_dim": args.hid_dim,
+            "num_convs": args.num_convs,
+            "validate_every": args.validate_every,
+        }
         apply_kaggle_preset(args)
-        if any(a in ("-batch_size", "--batch_size") for a in sys.argv):
-            args.batch_size = user_batch
+        if _argv_has("-batch_size", "--batch_size"):
+            args.batch_size = cli_overrides["batch_size"]
+        if _argv_has("-epochs", "--epochs"):
+            args.epochs = cli_overrides["epochs"]
+        if _argv_has("-dropout", "--dropout"):
+            args.dropout = cli_overrides["dropout"]
+        if _argv_has("-learningrate", "--learningrate"):
+            args.learningrate = cli_overrides["learningrate"]
+        if _argv_has("-hid_dim", "--hid_dim"):
+            args.hid_dim = cli_overrides["hid_dim"]
+        if _argv_has("-num_convs", "--num_convs"):
+            args.num_convs = cli_overrides["num_convs"]
+        if _argv_has("-validate_every", "--validate_every"):
+            args.validate_every = cli_overrides["validate_every"]
 
     device = resolve_device(force_cpu=args.cpu)
     use_cuda = device.type == "cuda"
@@ -153,6 +183,10 @@ def main():
 
     logger = create_logger(args.branch, data_dir)
     logger.info(f"device={device}, amp={args.amp}, cache_ppi={args.cache_ppi}, kaggle={args.kaggle}")
+    logger.info(
+        f"epochs={args.epochs}, batch_size={args.batch_size}, dropout={args.dropout}, "
+        f"lr={args.learningrate}, validate_every={args.validate_every}"
+    )
     logger.info(f"data_dir={data_dir}, cwd={os.getcwd()}")
 
     _register_pickle_classes()

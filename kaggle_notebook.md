@@ -54,22 +54,63 @@ Upload dataset đã pack bằng `pack_for_kaggle.py`, sau đó chạy:
 
 Script này sẽ tự tìm `proceed_data/ppi_graph_global` và `divided_data/*` trong `/kaggle/input` rồi symlink vào `/kaggle/working/CAFA6`.
 
-## Cell 5 — Train
+## Cell 5 — Train (~30 phút / nhánh)
+
+Preset `--kaggle`: **mf/cc** 5 epoch, **bp** 4 epoch, `hid_dim=256`, validate 1 lần ở epoch cuối (~30 phút/nhánh trên T4).
 
 ```python
 %env DATA_DIR=/kaggle/working/CAFA6
 %env DGL_CUDA=1
-!python /kaggle/working/CAFA6/train_Struct2GO2.py -branch mf --kaggle
+
+import __main__
+from data_processing.divide_data import MyDataSet
+__main__.MyDataSet = MyDataSet
+
+%cd /kaggle/working/CAFA6
+!python train_Struct2GO2.py -branch mf --kaggle
+!python train_Struct2GO2.py -branch cc --kaggle
+!python train_Struct2GO2.py -branch bp --kaggle -dropout 0.1
 ```
 
-Nếu T4 hết VRAM, giảm batch size:
+Nếu **mf đã train xong** (log có `saved final` hoặc `best_fscore`), chỉ train cc + bp:
 
 ```python
-!python /kaggle/working/CAFA6/train_Struct2GO2.py -branch mf --kaggle -batch_size 64
+# Bỏ qua dòng train mf ở trên, chỉ chạy:
+!python train_Struct2GO2.py -branch cc --kaggle
+!python train_Struct2GO2.py -branch bp --kaggle -dropout 0.1
+```
+
+OOM → giảm batch: `-batch_size 64`.
+
+## Cell 6 — Lưu log + model ra Output
+
+```python
+!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf cc bp --skip-train-if-ok
+```
+
+Hoặc chỉ lưu mf (không train lại):
+
+```python
+!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches mf
+```
+
+Kỳ vọng:
+
+```
+/kaggle/working/log/mf.log  cc.log  bp.log
+/kaggle/working/save_models/bestmodel_*.pkl  final_*.pkl
+```
+
+Zip download:
+
+```python
+!cd /kaggle/working && zip -r cafa6_output.zip log save_models
+!ls -lh /kaggle/working/cafa6_output.zip
 ```
 
 ## Ghi chú nhanh
 
-- Preset `--kaggle` đã bật `amp`, cache PPI và cấu hình phù hợp T4.
-- Không cần sửa path trong code; chỉ cần đặt `DATA_DIR=/kaggle/working/CAFA6`.
-- Nếu bạn muốn chạy từ đầu bằng notebook Kaggle khác, thứ tự an toàn là: clone -> install_dgl_kaggle.py -> verify -> kaggle_link_data.py -> train.
+- Preset `--kaggle` ~30p/nhánh: `amp`, cache PPI, ít ngưỡng F-score (9).
+- `-epochs`, `-batch_size`, … trên CLI vẫn được giữ nếu bạn truyền tay.
+- `DATA_DIR=/kaggle/working/CAFA6` — checkpoint luôn lưu vào `{DATA_DIR}/save_models/`.
+- Thứ tự: clone → install_dgl_kaggle.py → verify → kaggle_link_data.py → train → kaggle_save_results.py.
