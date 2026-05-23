@@ -4,6 +4,7 @@ import os
 import pickle
 import sys
 import warnings
+from functools import partial
 from typing import Any
 
 # Patch DGL on disk before import (Kaggle Py3.12 / torchdata break)
@@ -26,6 +27,36 @@ from model.evaluation import cacul_aupr, calculate_performance
 from model.network import SAGNetworkHierarchical
 
 warnings.filterwarnings("ignore")
+
+
+def _as_flat_float_tensor(x) -> torch.Tensor:
+    return torch.as_tensor(np.asarray(x), dtype=torch.float32).reshape(-1)
+
+
+def _fix_dim_1d(x: torch.Tensor, target_dim: int) -> torch.Tensor:
+    cur = int(x.shape[0])
+    if cur == target_dim:
+        return x
+    if cur > target_dim:
+        return x[:target_dim]
+    out = torch.zeros(target_dim, dtype=x.dtype)
+    out[:cur] = x
+    return out
+
+
+def _train_collate(samples, seq_dim: int, label_dim: int):
+    pids, graphs, labels, seq_feats, ppi_node_ids = zip(*samples)
+
+    fixed_seq_feats = [_fix_dim_1d(_as_flat_float_tensor(seq), seq_dim) for seq in seq_feats]
+    fixed_labels = [_fix_dim_1d(_as_flat_float_tensor(lbl), label_dim) for lbl in labels]
+
+    return (
+        list(pids),
+        dgl.batch(list(graphs)),
+        torch.stack(fixed_labels, dim=0),
+        torch.stack(fixed_seq_feats, dim=0),
+        torch.as_tensor(ppi_node_ids, dtype=torch.long),
+    )
 
 
 def _register_pickle_classes() -> None:
@@ -221,8 +252,10 @@ def main():
     if args.num_workers > 0:
         loader_kw["persistent_workers"] = True
 
-    train_dataloader = GraphDataLoader(dataset=train_dataset, shuffle=True, **loader_kw)
-    valid_dataloader = GraphDataLoader(dataset=valid_dataset, shuffle=False, **loader_kw)
+    collate_fn = partial(_train_collate, seq_dim=args.seq_dim, label_dim=labels_num)
+
+    train_dataloader = GraphDataLoader(dataset=train_dataset, shuffle=True, collate_fn=collate_fn, **loader_kw)
+    valid_dataloader = GraphDataLoader(dataset=valid_dataset, shuffle=False, collate_fn=collate_fn, **loader_kw)
 
     model = SAGNetworkHierarchical(
         56,

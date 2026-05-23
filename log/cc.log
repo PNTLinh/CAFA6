@@ -31,3 +31,129 @@
 2026-05-23 01:40:23,906 cc INFO saved final model: /kaggle/working/CAFA6/save_models/final_cc_64_0.0001_0.1.pkl
 2026-05-23 01:40:23,906 cc INFO best_aupr: 0.5294019090603
 2026-05-23 01:40:23,906 cc INFO best_score_dict: {0.3: [0.49865618356131414, 0.45380206622129743, 0.5533496550189183, np.float64(0.9053668190069802)]}
+2026-05-23 04:34:58,862 cc INFO device=cuda:0, amp=True, cache_ppi=True, kaggle=True
+2026-05-23 04:34:58,862 cc INFO epochs=12, batch_size=64, dropout=0.2, lr=0.0001, validate_every=3
+2026-05-23 04:34:58,862 cc INFO data_dir=/kaggle/working/CAFA6, cwd=/kaggle/working/CAFA6
+2026-05-23 04:35:46,836 cc INFO #########cc###########
+2026-05-23 04:35:46,836 cc INFO ########start training###########
+2026-05-23 04:35:46,836 cc INFO epoch: 0
+2026-05-23 04:35:51,940 cc INFO Epoch 0/12, step 29/154, loss=0.6864
+2026-05-23 04:35:55,034 cc INFO Epoch 0/12, step 59/154, loss=0.6266
+2026-05-23 04:35:58,135 cc INFO Epoch 0/12, step 89/154, loss=0.3397
+2026-05-23 04:36:01,162 cc INFO Epoch 0/12, step 119/154, loss=0.1021
+2026-05-23 04:36:04,180 cc INFO Epoch 0/12, step 149/154, loss=0.0889
+2026-05-23 04:36:04,551 cc INFO epoch: 1
+2026-05-23 04:36:07,700 cc INFO Epoch 1/12, step 29/154, loss=0.0629
+2026-05-23 04:36:10,789 cc INFO Epoch 1/12, step 59/154, loss=0.0826
+2026-05-23 04:36:13,819 cc INFO Epoch 1/12, step 89/154, loss=0.0704
+2026-05-23 04:36:16,847 cc INFO Epoch 1/12, step 119/154, loss=0.0708
+2026-05-23 04:36:19,872 cc INFO Epoch 1/12, step 149/154, loss=0.0895
+2026-05-23 04:36:20,248 cc INFO epoch: 2
+2026-05-23 04:36:23,407 cc INFO Epoch 2/12, step 29/154, loss=0.0922
+2026-05-23 04:36:26,460 cc INFO Epoch 2/12, step 59/154, loss=0.0836
+2026-05-23 04:36:29,521 cc INFO Epoch 2/12, step 89/154, loss=0.0809
+2026-05-23 04:36:32,513 cc INFO Epoch 2/12, step 119/154, loss=0.0796
+2026-05-23 04:36:35,582 cc INFO Epoch 2/12, step 149/154, loss=0.0818
+2026-05-23 04:36:35,967 cc INFO validating
+2026-05-23 04:36:36,420 cc INFO valid batch 1/44
+2026-05-23 04:36:37,189 cc INFO valid batch 10/44
+2026-05-23 04:36:38,002 cc INFO valid batch 20/44
+2026-05-23 04:36:38,808 cc INFO valid batch 30/44
+2026-05-23 04:36:39,620 cc INFO valid batch 40/44
+2026-05-23 04:36:39,891 cc INFO valid forward done, computing metrics...
+2026-05-23 04:36:47,603 cc INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_cc_64_0.0001_0.2.pkl
+2026-05-23 04:36:47,603 cc INFO ########valid metric###########
+2026-05-23 04:36:47,603 cc INFO epoch=2, train_loss=0.0829, valid_loss=0.0808
+2026-05-23 04:36:47,603 cc INFO threshold=0.3, f_score=0.5026935888473084, auc=0.9086713110085762, recall=0.4462453911583251, precision=0.5754907961018785, aupr=0.5388308862545926
+2026-05-23 04:36:47,603 cc INFO epoch: 3
+2026-05-23 04:36:50,924 cc INFO Epoch 3/12, step 29/154, loss=0.0810
+2026-05-23 04:36:54,033 cc INFO Epoch 3/12, step 59/154, loss=0.0802
+2026-05-23 04:36:57,100 cc INFO Epoch 3/12, step 89/154, loss=0.0794
+2026-05-23 04:37:00,160 cc INFO Epoch 3/12, step 119/154, loss=0.0898
+2026-05-23 04:37:03,186 cc INFO Epoch 3/12, step 149/154, loss=0.0834
+2026-05-23 04:37:03,547 cc INFO epoch: 4
+2026-05-23 04:37:06,656 cc INFO Epoch 4/12, step 29/154, loss=0.0699
+2026-05-23 04:37:09,670 cc INFO Epoch 4/12, step 59/154, loss=0.0793
+2026-05-23 04:37:12,706 cc INFO Epoch 4/12, step 89/154, loss=0.0763
+2026-05-23 04:37:15,704 cc INFO Epoch 4/12, step 119/154, loss=0.1000
+2026-05-23 04:37:18,838 cc INFO Epoch 4/12, step 149/154, loss=0.0666
+2026-05-23 04:37:19,204 cc INFO epoch: 5
+2026-05-23 04:37:22,302 cc INFO Epoch 5/12, step 29/154, loss=0.0739
+2026-05-23 04:37:25,261 cc INFO Epoch 5/12, step 59/154, loss=0.0720
+2026-05-23 04:37:28,287 cc INFO Epoch 5/12, step 89/154, loss=0.0873
+2026-05-23 04:37:31,376 cc INFO Epoch 5/12, step 119/154, loss=0.0631
+2026-05-23 04:37:34,424 cc INFO Epoch 5/12, step 149/154, loss=0.0861
+2026-05-23 04:37:34,778 cc INFO validating
+2026-05-23 04:37:34,935 cc INFO valid batch 1/44
+2026-05-23 04:37:35,602 cc INFO valid batch 10/44
+2026-05-23 04:37:36,352 cc INFO valid batch 20/44
+2026-05-23 04:37:37,082 cc INFO valid batch 30/44
+2026-05-23 04:37:37,847 cc INFO valid batch 40/44
+2026-05-23 04:37:38,111 cc INFO valid forward done, computing metrics...
+2026-05-23 04:37:45,206 cc INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_cc_64_0.0001_0.2.pkl
+2026-05-23 04:37:45,206 cc INFO ########valid metric###########
+2026-05-23 04:37:45,206 cc INFO epoch=5, train_loss=0.0763, valid_loss=0.0744
+2026-05-23 04:37:45,206 cc INFO threshold=0.3, f_score=0.562318954815063, auc=0.9274127136813358, recall=0.5208629941955975, precision=0.6109445919328594, aupr=0.5928570824509439
+2026-05-23 04:37:45,206 cc INFO epoch: 6
+2026-05-23 04:37:48,380 cc INFO Epoch 6/12, step 29/154, loss=0.0629
+2026-05-23 04:37:51,399 cc INFO Epoch 6/12, step 59/154, loss=0.0649
+2026-05-23 04:37:54,422 cc INFO Epoch 6/12, step 89/154, loss=0.0723
+2026-05-23 04:37:57,417 cc INFO Epoch 6/12, step 119/154, loss=0.0943
+2026-05-23 04:38:00,460 cc INFO Epoch 6/12, step 149/154, loss=0.0753
+2026-05-23 04:38:00,811 cc INFO epoch: 7
+2026-05-23 04:38:03,885 cc INFO Epoch 7/12, step 29/154, loss=0.0668
+2026-05-23 04:38:06,898 cc INFO Epoch 7/12, step 59/154, loss=0.0633
+2026-05-23 04:38:09,849 cc INFO Epoch 7/12, step 89/154, loss=0.0856
+2026-05-23 04:38:12,904 cc INFO Epoch 7/12, step 119/154, loss=0.0748
+2026-05-23 04:38:15,851 cc INFO Epoch 7/12, step 149/154, loss=0.0729
+2026-05-23 04:38:16,198 cc INFO epoch: 8
+2026-05-23 04:38:19,265 cc INFO Epoch 8/12, step 29/154, loss=0.0664
+2026-05-23 04:38:22,334 cc INFO Epoch 8/12, step 59/154, loss=0.0742
+2026-05-23 04:38:25,363 cc INFO Epoch 8/12, step 89/154, loss=0.0773
+2026-05-23 04:38:28,368 cc INFO Epoch 8/12, step 119/154, loss=0.0685
+2026-05-23 04:38:31,408 cc INFO Epoch 8/12, step 149/154, loss=0.0682
+2026-05-23 04:38:31,777 cc INFO validating
+2026-05-23 04:38:31,945 cc INFO valid batch 1/44
+2026-05-23 04:38:32,599 cc INFO valid batch 10/44
+2026-05-23 04:38:33,336 cc INFO valid batch 20/44
+2026-05-23 04:38:34,077 cc INFO valid batch 30/44
+2026-05-23 04:38:34,835 cc INFO valid batch 40/44
+2026-05-23 04:38:35,090 cc INFO valid forward done, computing metrics...
+2026-05-23 04:38:42,285 cc INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_cc_64_0.0001_0.2.pkl
+2026-05-23 04:38:42,286 cc INFO ########valid metric###########
+2026-05-23 04:38:42,286 cc INFO epoch=8, train_loss=0.0729, valid_loss=0.0714
+2026-05-23 04:38:42,286 cc INFO threshold=0.3, f_score=0.5726035941215453, auc=0.9358372155570964, recall=0.5362318840579711, precision=0.6142683895788902, aupr=0.6123667107411592
+2026-05-23 04:38:42,286 cc INFO epoch: 9
+2026-05-23 04:38:45,377 cc INFO Epoch 9/12, step 29/154, loss=0.0773
+2026-05-23 04:38:48,277 cc INFO Epoch 9/12, step 59/154, loss=0.0691
+2026-05-23 04:38:51,258 cc INFO Epoch 9/12, step 89/154, loss=0.0812
+2026-05-23 04:38:54,306 cc INFO Epoch 9/12, step 119/154, loss=0.0657
+2026-05-23 04:38:57,270 cc INFO Epoch 9/12, step 149/154, loss=0.0711
+2026-05-23 04:38:57,618 cc INFO epoch: 10
+2026-05-23 04:39:00,631 cc INFO Epoch 10/12, step 29/154, loss=0.0791
+2026-05-23 04:39:03,619 cc INFO Epoch 10/12, step 59/154, loss=0.0706
+2026-05-23 04:39:06,696 cc INFO Epoch 10/12, step 89/154, loss=0.0744
+2026-05-23 04:39:09,762 cc INFO Epoch 10/12, step 119/154, loss=0.0694
+2026-05-23 04:39:12,820 cc INFO Epoch 10/12, step 149/154, loss=0.0647
+2026-05-23 04:39:13,180 cc INFO epoch: 11
+2026-05-23 04:39:16,238 cc INFO Epoch 11/12, step 29/154, loss=0.0753
+2026-05-23 04:39:19,240 cc INFO Epoch 11/12, step 59/154, loss=0.0737
+2026-05-23 04:39:22,207 cc INFO Epoch 11/12, step 89/154, loss=0.0718
+2026-05-23 04:39:25,220 cc INFO Epoch 11/12, step 119/154, loss=0.0802
+2026-05-23 04:39:28,198 cc INFO Epoch 11/12, step 149/154, loss=0.0721
+2026-05-23 04:39:28,567 cc INFO validating
+2026-05-23 04:39:28,731 cc INFO valid batch 1/44
+2026-05-23 04:39:29,377 cc INFO valid batch 10/44
+2026-05-23 04:39:30,087 cc INFO valid batch 20/44
+2026-05-23 04:39:30,826 cc INFO valid batch 30/44
+2026-05-23 04:39:31,635 cc INFO valid batch 40/44
+2026-05-23 04:39:31,893 cc INFO valid forward done, computing metrics...
+2026-05-23 04:39:38,855 cc INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_cc_64_0.0001_0.2.pkl
+2026-05-23 04:39:38,855 cc INFO ########valid metric###########
+2026-05-23 04:39:38,855 cc INFO epoch=11, train_loss=0.0719, valid_loss=0.0709
+2026-05-23 04:39:38,855 cc INFO threshold=0.3, f_score=0.5750598493547947, auc=0.9370396888702225, recall=0.5392983608951192, precision=0.6159009422162929, aupr=0.6155670177428098
+2026-05-23 04:39:38,855 cc INFO best_fscore: 0.5750598493547947
+2026-05-23 04:39:38,855 cc INFO best_scores[thresh,fmax,recall,precision,auc]: [0.3, 0.5750598493547947, 0.5392983608951192, 0.6159009422162929, np.float64(0.9370396888702225)]
+2026-05-23 04:39:38,877 cc INFO saved final model: /kaggle/working/CAFA6/save_models/final_cc_64_0.0001_0.2.pkl
+2026-05-23 04:39:38,878 cc INFO best_aupr: 0.6155670177428098
+2026-05-23 04:39:38,878 cc INFO best_score_dict: {0.3: [0.5750598493547947, 0.5392983608951192, 0.6159009422162929, np.float64(0.9370396888702225)]}
