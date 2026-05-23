@@ -136,12 +136,11 @@ def apply_kaggle_preset(args: argparse.Namespace) -> None:
 
     if args.branch == "bp":
         args.batch_size = 96
-        args.epochs = 4
-        args.validate_every = 4
     else:
         args.batch_size = 96
-        args.epochs = 5
-        args.validate_every = 5
+    # Kaggle preset validates only at the end; keep user overrides for other knobs
+    # but do not let validate_every reintroduce long pauses every few epochs.
+    args.validate_every = args.epochs
 
 
 def labels_to_device(labels: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -198,8 +197,7 @@ def main():
             args.hid_dim = cli_overrides["hid_dim"]
         if _argv_has("-num_convs", "--num_convs"):
             args.num_convs = cli_overrides["num_convs"]
-        if _argv_has("-validate_every", "--validate_every"):
-            args.validate_every = cli_overrides["validate_every"]
+        args.validate_every = args.epochs
 
     device = resolve_device(force_cpu=args.cpu)
     use_cuda = device.type == "cuda"
