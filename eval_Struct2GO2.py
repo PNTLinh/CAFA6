@@ -28,6 +28,7 @@ import json
 import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
+import re
 
 
 def _argv_has(*names: str) -> bool:
@@ -124,6 +125,28 @@ def _resolve_eval_dataset(data_dir: str, branch: str, split: str) -> tuple[str, 
         f"No eval dataset under {divided} for branch={branch}, split={split}. "
         f"Tried: {order}. Re-run kaggle_link_data.py or pack test_dataset in kaggle_data.zip."
     )
+
+
+def _resolve_latest_model_path(data_dir: str, branch: str, baseline_parity: bool) -> str:
+    """Pick the newest bestmodel checkpoint for a branch when no path is provided."""
+    save_models = Path(data_dir) / "save_models"
+    if baseline_parity:
+        preferred = save_models / f"bestmodel_{branch}_64_0.0001_0.3.pkl"
+        if preferred.is_file():
+            return str(preferred)
+
+    candidates: list[tuple[float, Path]] = []
+    for path in save_models.glob(f"bestmodel_{branch}_*.pkl"):
+        match = re.search(r"_(\d+(?:\.\d+)?)\.pkl$", path.name)
+        if not match:
+            continue
+        candidates.append((float(match.group(1)), path))
+
+    if candidates:
+        return str(max(candidates, key=lambda item: item[0])[1])
+
+    fallback = save_models / f"bestmodel_{branch}_96_0.0001_0.2.pkl"
+    return str(fallback)
 
 
 def _load_vocab(data_dir: str, branch: str) -> list:
@@ -268,12 +291,8 @@ if __name__ == "__main__":
     ppi_graph_path = f"{data_dir}/proceed_data/ppi_graph_global"
     if args.model_path:
         model_path = args.model_path
-    elif args.baseline_parity:
-        model_path = (
-            f"{data_dir}/save_models/bestmodel_{args.branch}_64_0.0001_0.3.pkl"
-        )
     else:
-        model_path = f"{data_dir}/save_models/bestmodel_{args.branch}_96_0.0001_0.2.pkl"
+        model_path = _resolve_latest_model_path(data_dir, args.branch, args.baseline_parity)
     if not os.path.isabs(model_path) and not os.path.isfile(model_path):
         alt = os.path.join(data_dir, model_path)
         if os.path.isfile(alt):
