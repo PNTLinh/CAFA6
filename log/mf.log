@@ -1,0 +1,237 @@
+2026-05-22 16:28:24,159 mf INFO device=cuda:0, amp=True, cache_ppi=True, kaggle=True
+2026-05-22 16:28:24,159 mf INFO data_dir=/kaggle/working/CAFA6, cwd=/kaggle/working/CAFA6
+2026-05-22 16:29:23,664 mf INFO #########mf###########
+2026-05-22 16:29:23,665 mf INFO ########start training###########
+2026-05-22 16:29:23,665 mf INFO epoch: 0
+2026-05-22 16:29:29,427 mf INFO Epoch 0/20, step 29/169, loss=0.6758
+2026-05-22 16:29:33,377 mf INFO Epoch 0/20, step 59/169, loss=0.5590
+2026-05-22 16:29:37,401 mf INFO Epoch 0/20, step 89/169, loss=0.1543
+2026-05-22 16:29:41,430 mf INFO Epoch 0/20, step 119/169, loss=0.0731
+2026-05-22 16:29:45,464 mf INFO Epoch 0/20, step 149/169, loss=0.0679
+2026-05-22 16:29:47,969 mf INFO epoch: 1
+2026-05-22 16:29:52,134 mf INFO Epoch 1/20, step 29/169, loss=0.0522
+2026-05-22 16:29:56,225 mf INFO Epoch 1/20, step 59/169, loss=0.0739
+2026-05-22 16:30:00,329 mf INFO Epoch 1/20, step 89/169, loss=0.0664
+2026-05-22 16:30:04,442 mf INFO Epoch 1/20, step 119/169, loss=0.0567
+2026-05-22 16:30:08,609 mf INFO Epoch 1/20, step 149/169, loss=0.0739
+2026-05-22 16:30:11,176 mf INFO validating
+2026-05-22 16:30:11,675 mf INFO valid batch 1/49
+2026-05-22 16:30:12,551 mf INFO valid batch 10/49
+2026-05-22 16:30:13,507 mf INFO valid batch 20/49
+2026-05-22 16:30:14,494 mf INFO valid batch 30/49
+2026-05-22 16:30:15,514 mf INFO valid batch 40/49
+2026-05-22 16:30:16,336 mf INFO valid forward done, computing metrics...
+2026-05-22 16:30:57,287 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:30:57,287 mf INFO ########valid metric###########
+2026-05-22 16:30:57,287 mf INFO epoch=1, train_loss=0.0654, valid_loss=0.0641
+2026-05-22 16:30:57,287 mf INFO threshold=0.3, f_score=0.493634227637834, auc=0.8702764588969879, recall=0.3403790362081308, precision=0.8979226717026141, aupr=0.45560850656745666
+2026-05-22 16:30:57,287 mf INFO epoch: 2
+2026-05-22 16:31:01,680 mf INFO Epoch 2/20, step 29/169, loss=0.0578
+2026-05-22 16:31:05,917 mf INFO Epoch 2/20, step 59/169, loss=0.0680
+2026-05-22 16:31:10,025 mf INFO Epoch 2/20, step 89/169, loss=0.0664
+2026-05-22 16:31:14,092 mf INFO Epoch 2/20, step 119/169, loss=0.0517
+2026-05-22 16:31:18,220 mf INFO Epoch 2/20, step 149/169, loss=0.0592
+2026-05-22 16:31:20,825 mf INFO epoch: 3
+2026-05-22 16:31:25,082 mf INFO Epoch 3/20, step 29/169, loss=0.0511
+2026-05-22 16:31:29,413 mf INFO Epoch 3/20, step 59/169, loss=0.0648
+2026-05-22 16:31:33,575 mf INFO Epoch 3/20, step 89/169, loss=0.0693
+2026-05-22 16:31:37,695 mf INFO Epoch 3/20, step 119/169, loss=0.0653
+2026-05-22 16:31:41,942 mf INFO Epoch 3/20, step 149/169, loss=0.0583
+2026-05-22 16:31:44,478 mf INFO validating
+2026-05-22 16:31:44,671 mf INFO valid batch 1/49
+2026-05-22 16:31:45,526 mf INFO valid batch 10/49
+2026-05-22 16:31:46,484 mf INFO valid batch 20/49
+2026-05-22 16:31:47,475 mf INFO valid batch 30/49
+2026-05-22 16:31:48,439 mf INFO valid batch 40/49
+2026-05-22 16:31:49,277 mf INFO valid forward done, computing metrics...
+2026-05-22 16:32:30,088 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:32:30,088 mf INFO ########valid metric###########
+2026-05-22 16:32:30,088 mf INFO epoch=3, train_loss=0.0610, valid_loss=0.0585
+2026-05-22 16:32:30,089 mf INFO threshold=0.25, f_score=0.5315477981743405, auc=0.8983728224692998, recall=0.3993067329791643, precision=0.794750656167979, aupr=0.529627156361264
+2026-05-22 16:32:30,089 mf INFO epoch: 4
+2026-05-22 16:32:34,436 mf INFO Epoch 4/20, step 29/169, loss=0.0545
+2026-05-22 16:32:38,707 mf INFO Epoch 4/20, step 59/169, loss=0.0536
+2026-05-22 16:32:42,984 mf INFO Epoch 4/20, step 89/169, loss=0.0598
+2026-05-22 16:32:47,208 mf INFO Epoch 4/20, step 119/169, loss=0.0661
+2026-05-22 16:32:51,594 mf INFO Epoch 4/20, step 149/169, loss=0.0573
+2026-05-22 16:32:54,257 mf INFO epoch: 5
+2026-05-22 16:32:58,488 mf INFO Epoch 5/20, step 29/169, loss=0.0510
+2026-05-22 16:33:02,832 mf INFO Epoch 5/20, step 59/169, loss=0.0573
+2026-05-22 16:33:07,073 mf INFO Epoch 5/20, step 89/169, loss=0.0503
+2026-05-22 16:33:11,404 mf INFO Epoch 5/20, step 119/169, loss=0.0526
+2026-05-22 16:33:15,546 mf INFO Epoch 5/20, step 149/169, loss=0.0485
+2026-05-22 16:33:18,176 mf INFO validating
+2026-05-22 16:33:18,406 mf INFO valid batch 1/49
+2026-05-22 16:33:19,317 mf INFO valid batch 10/49
+2026-05-22 16:33:20,284 mf INFO valid batch 20/49
+2026-05-22 16:33:21,251 mf INFO valid batch 30/49
+2026-05-22 16:33:22,245 mf INFO valid batch 40/49
+2026-05-22 16:33:23,055 mf INFO valid forward done, computing metrics...
+2026-05-22 16:34:03,826 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:34:03,826 mf INFO ########valid metric###########
+2026-05-22 16:34:03,826 mf INFO epoch=5, train_loss=0.0533, valid_loss=0.0517
+2026-05-22 16:34:03,826 mf INFO threshold=0.35, f_score=0.5785272306456946, auc=0.9316108800173974, recall=0.46147469952149506, precision=0.7751408138725397, aupr=0.5936836861791353
+2026-05-22 16:34:03,827 mf INFO epoch: 6
+2026-05-22 16:34:08,082 mf INFO Epoch 6/20, step 29/169, loss=0.0535
+2026-05-22 16:34:12,496 mf INFO Epoch 6/20, step 59/169, loss=0.0518
+2026-05-22 16:34:16,735 mf INFO Epoch 6/20, step 89/169, loss=0.0636
+2026-05-22 16:34:20,978 mf INFO Epoch 6/20, step 119/169, loss=0.0438
+2026-05-22 16:34:25,250 mf INFO Epoch 6/20, step 149/169, loss=0.0526
+2026-05-22 16:34:27,893 mf INFO epoch: 7
+2026-05-22 16:34:32,209 mf INFO Epoch 7/20, step 29/169, loss=0.0460
+2026-05-22 16:34:36,455 mf INFO Epoch 7/20, step 59/169, loss=0.0446
+2026-05-22 16:34:40,777 mf INFO Epoch 7/20, step 89/169, loss=0.0697
+2026-05-22 16:34:45,006 mf INFO Epoch 7/20, step 119/169, loss=0.0513
+2026-05-22 16:34:49,319 mf INFO Epoch 7/20, step 149/169, loss=0.0376
+2026-05-22 16:34:52,076 mf INFO validating
+2026-05-22 16:34:52,273 mf INFO valid batch 1/49
+2026-05-22 16:34:53,138 mf INFO valid batch 10/49
+2026-05-22 16:34:54,129 mf INFO valid batch 20/49
+2026-05-22 16:34:55,113 mf INFO valid batch 30/49
+2026-05-22 16:34:56,144 mf INFO valid batch 40/49
+2026-05-22 16:34:56,953 mf INFO valid forward done, computing metrics...
+2026-05-22 16:35:37,746 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:35:37,746 mf INFO ########valid metric###########
+2026-05-22 16:35:37,746 mf INFO epoch=7, train_loss=0.0490, valid_loss=0.0483
+2026-05-22 16:35:37,746 mf INFO threshold=0.35, f_score=0.5977384351798972, auc=0.9462516914319654, recall=0.49293545834746244, precision=0.7591389114541024, aupr=0.62352868929969
+2026-05-22 16:35:37,746 mf INFO epoch: 8
+2026-05-22 16:35:42,125 mf INFO Epoch 8/20, step 29/169, loss=0.0483
+2026-05-22 16:35:46,375 mf INFO Epoch 8/20, step 59/169, loss=0.0430
+2026-05-22 16:35:50,768 mf INFO Epoch 8/20, step 89/169, loss=0.0455
+2026-05-22 16:35:54,948 mf INFO Epoch 8/20, step 119/169, loss=0.0437
+2026-05-22 16:35:59,254 mf INFO Epoch 8/20, step 149/169, loss=0.0532
+2026-05-22 16:36:01,856 mf INFO epoch: 9
+2026-05-22 16:36:06,335 mf INFO Epoch 9/20, step 29/169, loss=0.0407
+2026-05-22 16:36:10,678 mf INFO Epoch 9/20, step 59/169, loss=0.0526
+2026-05-22 16:36:14,976 mf INFO Epoch 9/20, step 89/169, loss=0.0467
+2026-05-22 16:36:19,434 mf INFO Epoch 9/20, step 119/169, loss=0.0434
+2026-05-22 16:36:23,800 mf INFO Epoch 9/20, step 149/169, loss=0.0463
+2026-05-22 16:36:26,411 mf INFO validating
+2026-05-22 16:36:26,602 mf INFO valid batch 1/49
+2026-05-22 16:36:27,506 mf INFO valid batch 10/49
+2026-05-22 16:36:28,511 mf INFO valid batch 20/49
+2026-05-22 16:36:29,560 mf INFO valid batch 30/49
+2026-05-22 16:36:30,569 mf INFO valid batch 40/49
+2026-05-22 16:36:31,423 mf INFO valid forward done, computing metrics...
+2026-05-22 16:37:12,264 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:37:12,264 mf INFO ########valid metric###########
+2026-05-22 16:37:12,264 mf INFO epoch=9, train_loss=0.0468, valid_loss=0.0465
+2026-05-22 16:37:12,264 mf INFO threshold=0.4, f_score=0.6147895543908636, auc=0.9522708057807232, recall=0.5060472476545722, precision=0.7830573694029851, aupr=0.642692000037275
+2026-05-22 16:37:12,264 mf INFO epoch: 10
+2026-05-22 16:37:16,663 mf INFO Epoch 10/20, step 29/169, loss=0.0476
+2026-05-22 16:37:20,961 mf INFO Epoch 10/20, step 59/169, loss=0.0493
+2026-05-22 16:37:25,275 mf INFO Epoch 10/20, step 89/169, loss=0.0415
+2026-05-22 16:37:29,589 mf INFO Epoch 10/20, step 119/169, loss=0.0403
+2026-05-22 16:37:33,893 mf INFO Epoch 10/20, step 149/169, loss=0.0501
+2026-05-22 16:37:36,569 mf INFO epoch: 11
+2026-05-22 16:37:40,988 mf INFO Epoch 11/20, step 29/169, loss=0.0474
+2026-05-22 16:37:45,275 mf INFO Epoch 11/20, step 59/169, loss=0.0396
+2026-05-22 16:37:49,682 mf INFO Epoch 11/20, step 89/169, loss=0.0374
+2026-05-22 16:37:53,987 mf INFO Epoch 11/20, step 119/169, loss=0.0462
+2026-05-22 16:37:58,648 mf INFO Epoch 11/20, step 149/169, loss=0.0451
+2026-05-22 16:38:01,379 mf INFO validating
+2026-05-22 16:38:01,591 mf INFO valid batch 1/49
+2026-05-22 16:38:02,551 mf INFO valid batch 10/49
+2026-05-22 16:38:03,591 mf INFO valid batch 20/49
+2026-05-22 16:38:04,657 mf INFO valid batch 30/49
+2026-05-22 16:38:05,758 mf INFO valid batch 40/49
+2026-05-22 16:38:06,686 mf INFO valid forward done, computing metrics...
+2026-05-22 16:38:48,478 mf INFO ########valid metric###########
+2026-05-22 16:38:48,479 mf INFO epoch=11, train_loss=0.0453, valid_loss=0.0465
+2026-05-22 16:38:48,479 mf INFO threshold=0.45, f_score=0.6128217844100807, auc=0.9548048529673274, recall=0.5121510116423647, precision=0.7627518096627575, aupr=0.6468204099949441
+2026-05-22 16:38:48,479 mf INFO epoch: 12
+2026-05-22 16:38:53,040 mf INFO Epoch 12/20, step 29/169, loss=0.0438
+2026-05-22 16:38:57,380 mf INFO Epoch 12/20, step 59/169, loss=0.0462
+2026-05-22 16:39:01,818 mf INFO Epoch 12/20, step 89/169, loss=0.0423
+2026-05-22 16:39:06,259 mf INFO Epoch 12/20, step 119/169, loss=0.0495
+2026-05-22 16:39:10,783 mf INFO Epoch 12/20, step 149/169, loss=0.0355
+2026-05-22 16:39:13,561 mf INFO epoch: 13
+2026-05-22 16:39:18,221 mf INFO Epoch 13/20, step 29/169, loss=0.0472
+2026-05-22 16:39:22,820 mf INFO Epoch 13/20, step 59/169, loss=0.0388
+2026-05-22 16:39:27,520 mf INFO Epoch 13/20, step 89/169, loss=0.0392
+2026-05-22 16:39:32,263 mf INFO Epoch 13/20, step 119/169, loss=0.0415
+2026-05-22 16:39:37,204 mf INFO Epoch 13/20, step 149/169, loss=0.0365
+2026-05-22 16:39:40,230 mf INFO validating
+2026-05-22 16:39:40,468 mf INFO valid batch 1/49
+2026-05-22 16:39:41,681 mf INFO valid batch 10/49
+2026-05-22 16:39:43,010 mf INFO valid batch 20/49
+2026-05-22 16:39:44,410 mf INFO valid batch 30/49
+2026-05-22 16:39:45,951 mf INFO valid batch 40/49
+2026-05-22 16:39:47,054 mf INFO valid forward done, computing metrics...
+2026-05-22 16:40:28,007 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:40:28,007 mf INFO ########valid metric###########
+2026-05-22 16:40:28,007 mf INFO epoch=13, train_loss=0.0443, valid_loss=0.0451
+2026-05-22 16:40:28,008 mf INFO threshold=0.4, f_score=0.6251641831604692, auc=0.9564761986028238, recall=0.5200632982932067, precision=0.783504569449963, aupr=0.6572942734981975
+2026-05-22 16:40:28,008 mf INFO epoch: 14
+2026-05-22 16:40:33,190 mf INFO Epoch 14/20, step 29/169, loss=0.0459
+2026-05-22 16:40:38,352 mf INFO Epoch 14/20, step 59/169, loss=0.0407
+2026-05-22 16:40:43,997 mf INFO Epoch 14/20, step 89/169, loss=0.0535
+2026-05-22 16:40:49,730 mf INFO Epoch 14/20, step 119/169, loss=0.0434
+2026-05-22 16:40:56,093 mf INFO Epoch 14/20, step 149/169, loss=0.0397
+2026-05-22 16:41:00,116 mf INFO epoch: 15
+2026-05-22 16:41:07,845 mf INFO Epoch 15/20, step 29/169, loss=0.0452
+2026-05-22 16:41:16,157 mf INFO Epoch 15/20, step 59/169, loss=0.0345
+2026-05-22 16:41:25,219 mf INFO Epoch 15/20, step 89/169, loss=0.0425
+2026-05-22 16:41:35,740 mf INFO Epoch 15/20, step 119/169, loss=0.0379
+2026-05-22 16:41:49,183 mf INFO Epoch 15/20, step 149/169, loss=0.0491
+2026-05-22 16:41:58,694 mf INFO validating
+2026-05-22 16:41:59,300 mf INFO valid batch 1/49
+2026-05-22 16:42:03,827 mf INFO valid batch 10/49
+2026-05-22 16:42:09,604 mf INFO valid batch 20/49
+2026-05-22 16:42:15,788 mf INFO valid batch 30/49
+2026-05-22 16:42:22,065 mf INFO valid batch 40/49
+2026-05-22 16:42:27,710 mf INFO valid forward done, computing metrics...
+2026-05-22 16:43:08,534 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:43:08,534 mf INFO ########valid metric###########
+2026-05-22 16:43:08,534 mf INFO epoch=15, train_loss=0.0438, valid_loss=0.0450
+2026-05-22 16:43:08,534 mf INFO threshold=0.45, f_score=0.6270801127580249, auc=0.9573641898734393, recall=0.5196488451829245, precision=0.7905083968590588, aupr=0.659886655715678
+2026-05-22 16:43:08,534 mf INFO epoch: 16
+2026-05-22 16:43:27,866 mf INFO Epoch 16/20, step 29/169, loss=0.0614
+2026-05-22 16:43:47,160 mf INFO Epoch 16/20, step 59/169, loss=0.0455
+2026-05-22 16:44:06,804 mf INFO Epoch 16/20, step 89/169, loss=0.0469
+2026-05-22 16:44:26,489 mf INFO Epoch 16/20, step 119/169, loss=0.0523
+2026-05-22 16:44:46,917 mf INFO Epoch 16/20, step 149/169, loss=0.0490
+2026-05-22 16:44:59,572 mf INFO epoch: 17
+2026-05-22 16:45:19,777 mf INFO Epoch 17/20, step 29/169, loss=0.0492
+2026-05-22 16:45:40,708 mf INFO Epoch 17/20, step 59/169, loss=0.0459
+2026-05-22 16:46:01,317 mf INFO Epoch 17/20, step 89/169, loss=0.0367
+2026-05-22 16:46:21,976 mf INFO Epoch 17/20, step 119/169, loss=0.0477
+2026-05-22 16:46:43,305 mf INFO Epoch 17/20, step 149/169, loss=0.0424
+2026-05-22 16:46:56,566 mf INFO validating
+2026-05-22 16:46:57,295 mf INFO valid batch 1/49
+2026-05-22 16:47:03,664 mf INFO valid batch 10/49
+2026-05-22 16:47:10,677 mf INFO valid batch 20/49
+2026-05-22 16:47:17,677 mf INFO valid batch 30/49
+2026-05-22 16:47:24,714 mf INFO valid batch 40/49
+2026-05-22 16:47:31,114 mf INFO valid forward done, computing metrics...
+2026-05-22 16:48:11,897 mf INFO saved checkpoint: /kaggle/working/CAFA6/save_models/bestmodel_mf_64_0.0001_0.1.pkl
+2026-05-22 16:48:11,897 mf INFO ########valid metric###########
+2026-05-22 16:48:11,897 mf INFO epoch=17, train_loss=0.0435, valid_loss=0.0447
+2026-05-22 16:48:11,898 mf INFO threshold=0.4, f_score=0.6287052525928404, auc=0.9578152440236936, recall=0.5310274669379451, precision=0.7704165300098393, aupr=0.6620705423511182
+2026-05-22 16:48:11,898 mf INFO epoch: 18
+2026-05-22 16:48:33,551 mf INFO Epoch 18/20, step 29/169, loss=0.0389
+2026-05-22 16:48:55,701 mf INFO Epoch 18/20, step 59/169, loss=0.0489
+2026-05-22 16:49:17,570 mf INFO Epoch 18/20, step 89/169, loss=0.0355
+2026-05-22 16:49:40,312 mf INFO Epoch 18/20, step 119/169, loss=0.0402
+2026-05-22 16:50:02,678 mf INFO Epoch 18/20, step 149/169, loss=0.0414
+2026-05-22 16:50:17,043 mf INFO epoch: 19
+2026-05-22 16:50:40,038 mf INFO Epoch 19/20, step 29/169, loss=0.0457
+2026-05-22 16:51:03,067 mf INFO Epoch 19/20, step 59/169, loss=0.0444
+2026-05-22 16:51:25,845 mf INFO Epoch 19/20, step 89/169, loss=0.0421
+2026-05-22 16:51:49,402 mf INFO Epoch 19/20, step 119/169, loss=0.0452
+2026-05-22 16:52:12,903 mf INFO Epoch 19/20, step 149/169, loss=0.0431
+2026-05-22 16:52:27,477 mf INFO validating
+2026-05-22 16:52:28,246 mf INFO valid batch 1/49
+2026-05-22 16:52:35,743 mf INFO valid batch 10/49
+2026-05-22 16:52:43,523 mf INFO valid batch 20/49
+2026-05-22 16:52:51,167 mf INFO valid batch 30/49
+2026-05-22 16:52:59,020 mf INFO valid batch 40/49
+2026-05-22 16:53:05,962 mf INFO valid forward done, computing metrics...
+2026-05-22 16:53:46,863 mf INFO ########valid metric###########
+2026-05-22 16:53:46,864 mf INFO epoch=19, train_loss=0.0434, valid_loss=0.0447
+2026-05-22 16:53:46,864 mf INFO threshold=0.4, f_score=0.6285510889635381, auc=0.9577654460001752, recall=0.5322708262687916, precision=0.7673546985334058, aupr=0.6618888025045576
+2026-05-22 16:53:46,864 mf INFO best_fscore: 0.6287052525928404
+2026-05-22 16:53:46,864 mf INFO best_scores[thresh,fmax,recall,precision,auc]: [0.4, 0.6287052525928404, 0.5310274669379451, 0.7704165300098393, np.float64(0.9578152440236936)]
+2026-05-22 16:53:46,896 mf INFO saved final model: /kaggle/working/CAFA6/save_models/final_mf_64_0.0001_0.1.pkl
+2026-05-22 16:53:46,896 mf INFO best_aupr: 0.6620705423511182
+2026-05-22 16:53:46,896 mf INFO best_score_dict: {0.05: [0.3741740841044822, 0.799065596624091, 0.24428113985579028, np.float64(0.9578152440236936)], 0.1: [0.49481485361127114, 0.7119174107983874, 0.3791816339226586, np.float64(0.9578152440236936)], 0.15: [0.5586143098663434, 0.6598093515692702, 0.4843322178278065, np.float64(0.9578152440236936)], 0.2: [0.5908024401689348, 0.6166685505444407, 0.5670188809977481, np.float64(0.9578152440236936)], 0.25: [0.6095223160907148, 0.5858106326061565, 0.6352345154436999, np.float64(0.9578152440236936)], 0.3: [0.6209859885832901, 0.5635808748728383, 0.6914116668207452, np.float64(0.9578152440236936)], 0.35: [0.6273737941774452, 0.5464375871293471, 0.7364545777687503, np.float64(0.9578152440236936)], 0.4: [0.6287052525928404, 0.5310274669379451, 0.7704165300098393, np.float64(0.9578152440236936)]}

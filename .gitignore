@@ -23,8 +23,7 @@ build/
 .ipynb_checkpoints/
 
 # Logs & checkpoints (tạo khi train)
-log/
-save_models/
+
 test_result/
 
 # Dữ liệu đã xử lý & dataset (quá lớn — dùng pack_for_kaggle.py riêng)
