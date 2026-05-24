@@ -15,6 +15,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_score, reca
 import pickle
 from data_processing.divide_data import MyDataSet
 from model.evaluation import cacul_aupr, calculate_performance, roc_auc_flat
+from model.network import patch_legacy_checkpoint
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import roc_auc_score
 import warnings
@@ -357,11 +358,13 @@ if __name__ == "__main__":
         print(f"[WARN] Using placeholder vocabulary with {len(idx2term)} terms")
     model = _load_model_checkpoint(model_path, device)
     model = model.to(device)
-    use_ppi = getattr(model, "use_ppi", args.use_ppi)
-    if args.use_ppi and not use_ppi:
-        print("[WARN] --use_ppi set but checkpoint has use_ppi=False; following model")
+    model_has_ppi = patch_legacy_checkpoint(model)
+    use_ppi = model_has_ppi and args.use_ppi
+    if args.use_ppi and not model_has_ppi:
+        print("[WARN] --use_ppi set but checkpoint has no ppi_encoder; eval without PPI")
     if not use_ppi:
         args.use_ppi = False
+        ppi_graph = None
     ppi_node_emb = None
     if use_ppi and ppi_graph is not None and hasattr(model, "encode_ppi_nodes"):
         with torch.no_grad():

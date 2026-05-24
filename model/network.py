@@ -6,6 +6,15 @@ from dgl.nn import GraphConv, GATConv, AvgPooling, MaxPooling, SAGEConv
 from model.layer import ConvPoolBlock, SAGPool, MultiModalCrossAttention
 
 
+def patch_legacy_checkpoint(model: torch.nn.Module) -> bool:
+    """Full-model .pkl from older code may lack use_ppi on the instance."""
+    if hasattr(model, "use_ppi"):
+        return bool(model.use_ppi)
+    has_ppi = getattr(model, "ppi_encoder", None) is not None
+    model.use_ppi = has_ppi
+    return has_ppi
+
+
 class PPIEncoder(torch.nn.Module):
     """
     2-layer GraphSAGE encoder trên PPI global graph.
@@ -122,7 +131,7 @@ class SAGNetworkHierarchical(torch.nn.Module):
 
     def encode_ppi_nodes(self, ppi_graph: dgl.DGLGraph) -> torch.Tensor:
         """Cache PPI node embeddings [N, ppi_out_dim] — gọi 1 lần/epoch khi train."""
-        if not self.use_ppi:
+        if not getattr(self, "use_ppi", getattr(self, "ppi_encoder", None) is not None):
             raise RuntimeError("encode_ppi_nodes called but use_ppi=False")
         return self.ppi_encoder.encode_all_nodes(ppi_graph)
 
@@ -145,7 +154,7 @@ class SAGNetworkHierarchical(torch.nn.Module):
             graph, feat, readout = self.convpools[i](graph, feat)
             final_readout = readout if final_readout is None else final_readout + readout
 
-        if self.use_ppi:
+        if getattr(self, "use_ppi", getattr(self, "ppi_encoder", None) is not None):
             if ppi_node_emb is not None:
                 ppi_emb = PPIEncoder.gather_batch(ppi_node_emb, ppi_node_ids)
             else:
