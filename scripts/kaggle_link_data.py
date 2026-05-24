@@ -6,6 +6,14 @@ import shutil
 import sys
 from pathlib import Path
 
+REPO = Path(__file__).resolve().parents[1]
+
+
+def _ensure_repo_on_path() -> None:
+    repo = str(REPO)
+    if repo not in sys.path:
+        sys.path.insert(0, repo)
+
 
 def find_cafa6_data_root(input_root: Path) -> Path:
     def has_raw_split_sources(root: Path) -> bool:
@@ -64,6 +72,7 @@ def _validate_pickle(path: Path, min_bytes: int = 1024) -> None:
     size = path.stat().st_size
     if size < min_bytes:
         raise RuntimeError(f"{path.name} too small ({size} B) — truncated upload or bad copy")
+    _ensure_repo_on_path()
     import pickle
 
     import __main__
@@ -86,8 +95,21 @@ def main() -> None:
         choices=["mf", "cc", "bp", "all"],
         help="Copy divided_data vào /kaggle/working (tốn ~30GB). Mặc định: symlink từ input.",
     )
+    parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="Bỏ qua pickle.load khi kiểm tra (chỉ kiểm tra file tồn tại + kích thước).",
+    )
+    parser.add_argument(
+        "--branches",
+        nargs="*",
+        default=["mf", "cc", "bp"],
+        choices=["mf", "cc", "bp"],
+        help="Chỉ validate train/valid của các nhánh (vd. --branches cc khi train CC).",
+    )
     args = parser.parse_args()
 
+    _ensure_repo_on_path()
     work = Path(os.environ.get("DATA_DIR", "/kaggle/working/CAFA6"))
     data_root = find_cafa6_data_root(Path("/kaggle/input"))
     print("Data root:", data_root)
@@ -129,20 +151,37 @@ def main() -> None:
     print(f"  {dst} <- {src} (writable branches: {sorted(copy_branch_names) or 'none'})")
 
     assert (work / "proceed_data/ppi_graph_global").exists()
-    for branch in ("mf", "cc", "bp"):
+    validate_branches = list(dict.fromkeys(args.branches))
+    errors: list[str] = []
+    for branch in validate_branches:
         for split in ("train", "valid"):
             p = work / "divided_data" / f"{branch}_{split}_dataset"
             if not p.exists():
                 print(f"[WARN] missing {p.name}")
+                errors.append(f"missing {p.name}")
                 continue
             try:
-                _validate_pickle(p)
-                print(f"  OK {p.name} ({p.stat().st_size / 1e6:.1f} MB)")
-            except Exception as exc:
+                if args.no_validate:
+                    print(f"  OK {p.name} ({p.stat().st_size / 1e6:.1f} MB, skip pickle load)")
+                else:
+                    _validate_pickle(p)
+                    print(f"  OK {p.name} ({p.stat().st_size / 1e6:.1f} MB)")
+            except ModuleNotFoundError as exc:
                 raise RuntimeError(
-                    f"Pickle invalid: {p}. Re-upload dataset or run with --copy-splits all "
-                    f"after fixing source under {data_root / 'divided_data'}"
+                    f"Cannot import CAFA6 modules while validating {p}. "
+                    "Run: cd /kaggle/working/CAFA6 && python scripts/kaggle_link_data.py"
                 ) from exc
+            except Exception as exc:
+                msg = f"{p.name}: {type(exc).__name__}: {exc}"
+                if branch == "mf" and split == "train":
+                    print(f"  [WARN] {msg} — copy mf_train từ dataset mf-train1 nếu train MF")
+                else:
+                    errors.append(msg)
+    if errors:
+        raise RuntimeError(
+            "Data check failed:\n  - " + "\n  - ".join(errors) + "\n"
+            f"Source: {data_root / 'divided_data'}"
+        )
     print("Data OK")
 
 

@@ -123,24 +123,50 @@ def copy_branch(
         print(f"         (không có .pkl cho nhánh {branch})")
 
 
-def copy_test_result(branch: str, data_dir: Path, out_test: Path) -> None:
+def _test_log_candidates(data_dir: Path, branch: str) -> list[Path]:
+    name = f"test_{branch}.log"
+    roots = [
+        data_dir / "log",
+        Path("/kaggle/working/log"),
+        Path("/kaggle/working/CAFA6/log"),
+    ]
+    out: list[Path] = []
+    for root in roots:
+        p = root / name
+        if p.is_file():
+            out.append(p)
+    return out
+
+
+def copy_test_result(
+    branch: str, data_dir: Path, out_test: Path, out_log: Path | None = None
+) -> None:
     src_dir = data_dir / "test_result"
     if not src_dir.is_dir():
+        src_dir = Path("/kaggle/working/CAFA6/test_result")
+    if src_dir.is_dir():
+        out_test.mkdir(parents=True, exist_ok=True)
+        for pattern in (
+            f"{branch}_result.json",
+            f"{branch}*_pred_actual.pkl",
+            f"{branch}_roc_curve.png",
+        ):
+            for f in src_dir.glob(pattern):
+                dst = out_test / f.name
+                shutil.copy2(f, dst)
+                print(f"         test_result: {f.name} -> {dst}")
+
+    logs = _test_log_candidates(data_dir, branch)
+    if not logs:
         return
+    src_log = max(logs, key=lambda p: p.stat().st_mtime)
     out_test.mkdir(parents=True, exist_ok=True)
-    for pattern in (
-        f"{branch}_result.json",
-        f"{branch}*_pred_actual.pkl",
-        f"{branch}_roc_curve.png",
-    ):
-        for f in src_dir.glob(pattern):
-            dst = out_test / f.name
-            shutil.copy2(f, dst)
-            print(f"         test_result: {f.name} -> {dst}")
-    log_src = data_dir / "log" / f"test_{branch}.log"
-    if log_src.is_file():
-        dst = out_test / f"test_{branch}.log"
-        shutil.copy2(log_src, dst)
+    shutil.copy2(src_log, out_test / src_log.name)
+    print(f"         test log: {src_log} -> {out_test / src_log.name}")
+    if out_log is not None:
+        out_log.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_log, out_log / src_log.name)
+        print(f"         test log: {src_log} -> {out_log / src_log.name}")
 
 
 def make_zip(
@@ -216,7 +242,7 @@ def main() -> None:
             if info["status"] == "ok":
                 ok_skip.append(branch)
         copy_branch(branch, data_dir, out_log, out_models)
-        copy_test_result(branch, data_dir, out_test)
+        copy_test_result(branch, data_dir, out_test, out_log)
 
     if args.zip:
         zip_path = Path("/kaggle/working") / args.zip_name

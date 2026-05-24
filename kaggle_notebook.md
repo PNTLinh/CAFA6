@@ -165,18 +165,59 @@ else:
 
 ---
 
-## Cell 6 — Kiểm tra Output
+## Cell 6 — Lưu log + model + test result + zip (copy-paste)
+
+Chạy **sau train/eval** (mỗi nhánh hoặc cả 3). Output nằm dưới `/kaggle/working/` → tab **Output** của notebook.
 
 ```python
-!ls -lh /kaggle/working/cafa6_output.zip
-!ls -lh /kaggle/working/log/
-!ls -lh /kaggle/working/save_models/
-!ls -lh /kaggle/working/test_result/ 2>/dev/null || echo "(chưa eval)"
+import os
+from pathlib import Path
+
+os.environ["DATA_DIR"] = "/kaggle/working/CAFA6"
+
+# Đổi danh sách nhánh nếu chỉ mới xong 1–2 nhánh: ví dụ ["cc"] hoặc ["cc", "mf"]
+BRANCHES = ["cc", "mf", "bp"]
+ZIP_NAME = "cafa6_output.zip"
+
+branch_args = " ".join(BRANCHES)
+!python /kaggle/working/CAFA6/scripts/kaggle_save_results.py --branches {branch_args} --zip --zip-name {ZIP_NAME}
 ```
 
 ---
 
-## Cell 7 — Tải zip về máy local
+## Cell 7 — Kiểm tra đã lưu đủ chưa
+
+```python
+from pathlib import Path
+
+zip_path = Path("/kaggle/working/cafa6_output.zip")
+print("zip:", zip_path, f"({zip_path.stat().st_size / 1e6:.1f} MB)" if zip_path.is_file() else "MISSING")
+
+for folder in ["log", "save_models", "test_result"]:
+    p = Path("/kaggle/working") / folder
+    print(f"\n=== {folder}/ ===")
+    if not p.is_dir():
+        print("  (trống)")
+        continue
+    for f in sorted(p.iterdir()):
+        if f.is_file():
+            size = f.stat().st_size
+            unit = f"{size / 1e6:.1f} MB" if size > 1e6 else f"{size} B"
+            print(f"  {f.name}  ({unit})")
+
+# Metric test (nếu đã eval)
+import re
+for log in sorted(Path("/kaggle/working/log").glob("test_*.log")):
+    text = log.read_text(encoding="utf-8", errors="replace")
+    hits = re.findall(r"f_score\s+([\d.]+).*?auc\s+([\d.]+).*?aupr\s+([\d.]+)", text, re.S)
+    if hits:
+        f, a, u = hits[-1]
+        print(f"\n{log.name}: F-max={f}, AUC={a}, AUPR={u}")
+```
+
+---
+
+## Cell 8 — Tải zip về máy
 
 ```python
 from IPython.display import FileLink, display
@@ -184,12 +225,13 @@ from IPython.display import FileLink, display
 display(FileLink("/kaggle/working/cafa6_output.zip"))
 ```
 
-Bấm link **cafa6_output.zip** trong output cell, hoặc **Save Version → Save & Run All** rồi tải từ tab **Output** bên phải.
+Bấm link **cafa6_output.zip** trong output, hoặc **Save Version → Save & Run All** rồi tải từ tab **Output** bên phải.
 
-Nội dung zip:
+**Nội dung zip:**
 
 ```
 log/mf.log  log/cc.log  log/bp.log
+log/test_mf.log  log/test_cc.log  log/test_bp.log
 save_models/bestmodel_*.pkl  final_*.pkl
-test_result/   (nếu Cell 5 có chạy eval)
+test_result/*_result.json  *_pred_actual.pkl  *_roc_curve.png
 ```

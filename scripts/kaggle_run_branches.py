@@ -148,7 +148,7 @@ def main() -> int:
                 print(f"[{branch}] TRAIN FAILED (exit {rc})", file=sys.stderr)
                 failed.append(branch)
                 copy_branch(branch, data_dir, out_log, out_models)
-                copy_test_result(branch, data_dir, out_test)
+                copy_test_result(branch, data_dir, out_test, out_log)
                 if not args.no_zip:
                     make_zip(out_log, out_models, out_test, zip_path, data_dir)
                 continue
@@ -161,7 +161,7 @@ def main() -> int:
             print(f"[{branch}] skip train (--skip)")
 
         copy_branch(branch, data_dir, out_log, out_models)
-        copy_test_result(branch, data_dir, out_test)
+        copy_test_result(branch, data_dir, out_test, out_log)
 
         if not args.no_zip:
             make_zip(out_log, out_models, out_test, zip_path, data_dir)
