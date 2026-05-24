@@ -14,7 +14,7 @@ from dgl.dataloading import GraphDataLoader
 from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_score, recall_score, f1_score, average_precision_score
 import pickle
 from data_processing.divide_data import MyDataSet
-from model.evaluation import cacul_aupr,calculate_performance
+from model.evaluation import cacul_aupr, calculate_performance, roc_auc_flat
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import roc_auc_score
 import warnings
@@ -38,6 +38,24 @@ def _argv_has(*names: str) -> bool:
 _BASELINE_EVAL_THRESH = {"mf": 0.71, "cc": 0.5, "bp": 0.4}
 
 
+def _dataset_label_dim(dataset) -> int:
+    return int(np.asarray(dataset[0][2]).reshape(-1).shape[0])
+
+
+def _trim_to_dataset_labels(pred: list, actual: list, dataset_label_dim: int) -> tuple[list, list, int]:
+    """Metrics/JSON only on real GO dims when checkpoint was trained with padded label head."""
+    output_dim = len(pred[0])
+    if output_dim <= dataset_label_dim:
+        return pred, actual, output_dim
+    print(
+        f"[WARN] Model outputs {output_dim} dims but dataset has {dataset_label_dim}; "
+        f"metrics/JSON use first {dataset_label_dim} label columns only."
+    )
+    pred = [row[:dataset_label_dim] for row in pred]
+    actual = [row[:dataset_label_dim] for row in actual]
+    return pred, actual, dataset_label_dim
+
+
 def _load_model_checkpoint(model_path, device):
     """Load trusted full-model checkpoints across torch versions."""
     try:
@@ -46,6 +64,7 @@ def _load_model_checkpoint(model_path, device):
     except TypeError:
         # Older torch versions do not support weights_only argument.
         return torch.load(model_path, map_location=device)
+
 
 def create_logger(branch_name, data_dir: str):
     log_dir = os.path.join(data_dir, "log")
@@ -343,6 +362,12 @@ if __name__ == "__main__":
         label_dim = int(model.lin3.out_features)
     else:
         label_dim = int(label_network.num_nodes())
+    dataset_label_dim = _dataset_label_dim(test_dataset)
+    if label_dim != dataset_label_dim:
+        print(
+            f"[INFO] dataset labels={dataset_label_dim}, model head={label_dim} "
+            f"(collate pads to model; metrics trim to dataset)"
+        )
 
     collate_fn = _build_eval_collate_fn(seq_dim=seq_dim, label_dim=label_dim)
 
@@ -398,7 +423,7 @@ if __name__ == "__main__":
     if not pred:
         raise RuntimeError("No predictions were generated. Check eval dataset and dataloader.")
 
-    output_dim = len(pred[0])
+    pred, actual, output_dim = _trim_to_dataset_labels(pred, actual, dataset_label_dim)
     idx2term = _align_vocab_to_output(idx2term, output_dim)
 
     result = {}
@@ -423,9 +448,11 @@ if __name__ == "__main__":
         json.dump(result, f, indent=4)
         
     t_loss /= len(test_dataloader)
-    fpr, tpr, th = roc_curve(np.array(actual).flatten(), np.array(pred).flatten(), pos_label=1)
-    auc_score = auc(fpr, tpr)
-    aupr = cacul_aupr(np.array(actual).flatten(), np.array(pred).flatten())
+    flat_actual = np.asarray(actual).reshape(-1)
+    flat_pred = np.asarray(pred).reshape(-1)
+    auc_score = roc_auc_flat(flat_actual, flat_pred)
+    aupr = cacul_aupr(flat_actual, flat_pred)
+    fpr, tpr, _ = roc_curve(flat_actual, flat_pred, pos_label=1)
 
     each_best_fcore = 0
     each_best_scores = []

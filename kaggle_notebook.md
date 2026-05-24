@@ -79,6 +79,31 @@ for rel_path in [
 
 Nếu `cc_test_dataset` và `cc_valid_dataset` đều `False`, dữ liệu Kaggle chưa đủ để eval branch `cc`; cần re-run `kaggle_link_data.py` hoặc pack lại dataset.
 
+## Cell 4.6b — Vá `mf_train_dataset` nếu bị EOFError
+
+Chạy cell này chỉ khi train nhánh `mf` và file `mf_train_dataset` bị rỗng/hỏng. Cell sẽ tìm file `mf_train_dataset` trong `/kaggle/input`, copy bản hợp lệ sang thư mục làm việc, rồi kiểm tra lại kích thước file.
+
+```python
+from pathlib import Path
+import shutil
+
+work_file = Path("/kaggle/working/CAFA6/divided_data/mf_train_dataset")
+if work_file.exists() and work_file.stat().st_size > 0:
+    print("mf_train_dataset OK:", work_file)
+else:
+    candidates = [p for p in Path("/kaggle/input").rglob("mf_train_dataset") if p.is_file() and p.stat().st_size > 0]
+    if not candidates:
+        raise FileNotFoundError(
+            "Không tìm thấy mf_train_dataset hợp lệ trong /kaggle/input. Hãy gắn dataset mf-train1 rồi chạy lại cell này."
+        )
+
+    source = max(candidates, key=lambda p: p.stat().st_size)
+    work_file.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, work_file)
+    print(f"copied {source} -> {work_file}")
+    print("size(bytes)=", work_file.stat().st_size)
+```
+
 ## Cell 4.6 — Sửa lại `eval_Struct2GO2.py` nếu notebook đang dùng bản cũ
 
 Chạy cell này nếu bạn thấy traceback vẫn trỏ tới `D:/CAFA6` hoặc line 248 cũ sau khi clone repo vào Kaggle.

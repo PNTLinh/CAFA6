@@ -338,12 +338,15 @@ def main():
     sample_label = train_dataset[0][2]
     detected_labels = int(np.asarray(sample_label).reshape(-1).shape[0])
     network_labels = int(label_network.num_nodes())
-    if detected_labels != network_labels:
+    if _argv_has("-labels_num", "--labels_num"):
+        labels_num = args.labels_num
+        print(f"[INFO] Using CLI labels_num={labels_num}")
+    elif detected_labels != network_labels:
         print(
-            f"[INFO] label dim in dataset={detected_labels}, label_network nodes={network_labels}; "
-            f"using labels_num={network_labels} (truncate/pad in collate)"
+            f"[WARN] label dim in dataset={detected_labels}, label_network nodes={network_labels}; "
+            f"using labels_num={detected_labels} (dataset wins — graph may list extra GO nodes)"
         )
-        labels_num = network_labels
+        labels_num = detected_labels
     elif detected_labels != args.labels_num:
         print(f"[INFO] Auto-detected labels_num = {detected_labels} (override CLI {args.labels_num})")
         labels_num = detected_labels
