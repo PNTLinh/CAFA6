@@ -31,7 +31,7 @@ DEFAULT_ORDER = ("cc", "mf", "bp")
 
 BRANCH_TRAIN_ARGS: dict[str, list[str]] = {
     "cc": [],
-    "mf": [],
+    "mf": [],  # baseline-parity → dropout 0.1 via scripts/baseline_config.py
     "bp": ["-dropout", "0.1"],
 }
 
@@ -57,26 +57,31 @@ def _ensure_mydataset() -> None:
 
 
 def train_branch(
-    branch: str, kaggle: bool, extra: list[str], cwd: Path, env: dict[str, str]
+    branch: str,
+    kaggle: bool,
+    baseline_parity: bool,
+    extra: list[str],
+    cwd: Path,
+    env: dict[str, str],
 ) -> int:
     cmd = [sys.executable, "train_Struct2GO2.py", "-branch", branch]
-    if kaggle:
+    if baseline_parity:
+        cmd.append("--baseline-parity")
+    elif kaggle:
         cmd.append("--kaggle")
     cmd.extend(BRANCH_TRAIN_ARGS.get(branch, []))
     cmd.extend(extra)
     return _run(cmd, cwd, env)
 
 
-def eval_branch(branch: str, cwd: Path, env: dict[str, str]) -> int:
-    cmd = [
-        sys.executable,
-        "eval_Struct2GO2.py",
-        "-branch",
-        branch,
-        "--no-baseline-parity",
-        "--split",
-        "auto",
-    ]
+def eval_branch(
+    branch: str, cwd: Path, env: dict[str, str], baseline_parity: bool
+) -> int:
+    cmd = [sys.executable, "eval_Struct2GO2.py", "-branch", branch]
+    if baseline_parity:
+        cmd.extend(["--baseline-parity", "--split", "test"])
+    else:
+        cmd.extend(["--no-baseline-parity", "--split", "auto"])
     return _run(cmd, cwd, env)
 
 
@@ -101,6 +106,11 @@ def main() -> int:
         help="Nhánh đã train xong — chỉ copy + zip, không train lại",
     )
     parser.add_argument("--no-kaggle", action="store_true", help="Dùng preset mặc định repo (20 epoch, chậm)")
+    parser.add_argument(
+        "--baseline-parity",
+        action="store_true",
+        help="Train/eval Table 1 (20 ep, hid 512); MF dropout 0.1 — không kết hợp --kaggle",
+    )
     parser.add_argument("--no-eval", action="store_true", help="Không chạy eval sau mỗi nhánh")
     parser.add_argument("--no-zip", action="store_true", help="Không tạo/cập nhật zip sau mỗi nhánh")
     parser.add_argument(
@@ -142,7 +152,12 @@ def main() -> int:
 
         if branch not in skip_set:
             rc = train_branch(
-                branch, kaggle=not args.no_kaggle, extra=args.train_extra, cwd=cwd, env=env
+                branch,
+                kaggle=not args.no_kaggle and not args.baseline_parity,
+                baseline_parity=args.baseline_parity,
+                extra=args.train_extra,
+                cwd=cwd,
+                env=env,
             )
             if rc != 0:
                 print(f"[{branch}] TRAIN FAILED (exit {rc})", file=sys.stderr)
@@ -154,7 +169,7 @@ def main() -> int:
                 continue
 
             if not args.no_eval:
-                rc = eval_branch(branch, cwd, env)
+                rc = eval_branch(branch, cwd, env, baseline_parity=args.baseline_parity)
                 if rc != 0:
                     print(f"[{branch}] EVAL FAILED (exit {rc}) — vẫn lưu log/model", file=sys.stderr)
         else:

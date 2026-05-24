@@ -35,7 +35,16 @@ def _argv_has(*names: str) -> bool:
     return any(n in sys.argv for n in names)
 
 
-_BASELINE_EVAL_THRESH = {"mf": 0.71, "cc": 0.5, "bp": 0.4}
+try:
+    from scripts.baseline_config import (
+        BASELINE_EVAL_THRESH as _BASELINE_EVAL_THRESH,
+        baseline_checkpoint_name,
+    )
+except ImportError:
+    from baseline_config import (  # type: ignore
+        BASELINE_EVAL_THRESH as _BASELINE_EVAL_THRESH,
+        baseline_checkpoint_name,
+    )
 
 
 def _dataset_label_dim(dataset) -> int:
@@ -147,12 +156,16 @@ def _resolve_eval_dataset(data_dir: str, branch: str, split: str) -> tuple[str, 
 
 
 def _resolve_latest_model_path(data_dir: str, branch: str, baseline_parity: bool) -> str:
-    """Pick the newest bestmodel checkpoint for a branch when no path is provided."""
+    """Pick bestmodel checkpoint for a branch when no path is provided."""
     save_models = Path(data_dir) / "save_models"
     if baseline_parity:
-        preferred = save_models / f"bestmodel_{branch}_64_0.0001_0.3.pkl"
+        preferred = save_models / baseline_checkpoint_name(branch)
         if preferred.is_file():
             return str(preferred)
+        # Newest bestmodel for this branch (avoid stale 0.3.pkl after failed MF run)
+        by_branch = list(save_models.glob(f"bestmodel_{branch}_*.pkl"))
+        if by_branch:
+            return str(max(by_branch, key=lambda p: p.stat().st_mtime))
 
     candidates: list[tuple[float, Path]] = []
     for path in save_models.glob(f"bestmodel_{branch}_*.pkl"):

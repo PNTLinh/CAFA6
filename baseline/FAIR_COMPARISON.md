@@ -12,7 +12,7 @@ Preset `--baseline-parity` chỉ đồng bộ **protocol huấn luyện và đá
 | epoch | 20 | |
 | batch_size | 64 | Tên checkpoint: `bestmodel_{branch}_64_0.0001_0.3.pkl` |
 | lr | 1e-4 | |
-| dropout | 0.3 | |
+| dropout | 0.3 (paper); **mf 0.1, cc 0.2, bp 0.1** (`scripts/baseline_config.py`) | MF `0.3` + PPI hay train fail |
 | hid_dim | 512 | |
 | num_convs | 6 | |
 | pool_ratio | 0.75 | |

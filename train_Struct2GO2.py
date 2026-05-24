@@ -180,10 +180,16 @@ def apply_kaggle_preset(args: argparse.Namespace) -> None:
 
 def apply_baseline_parity_preset(args: argparse.Namespace) -> None:
     """Train protocol khớp baseline Struct2GO (Table 1); kiến trúc vẫn có PPI."""
+    from scripts.baseline_config import (
+        BASELINE_BATCH_SIZE,
+        BASELINE_LR,
+        BRANCH_BASELINE_DROPOUT,
+    )
+
     args.epochs = 20
-    args.batch_size = 64
-    args.learningrate = 1e-4
-    args.dropout = 0.3
+    args.batch_size = BASELINE_BATCH_SIZE
+    args.learningrate = BASELINE_LR
+    args.dropout = BRANCH_BASELINE_DROPOUT.get(args.branch, 0.3)
     args.hid_dim = 512
     args.num_convs = 6
     args.pool_ratio = 0.75

@@ -107,7 +107,11 @@ def copy_branch(
     for models_dir in _model_dirs(data_dir):
         if not models_dir.is_dir():
             continue
-        patterns = (f"*_{branch}_*.pkl", f"*{branch}*.pkl")
+        patterns = (
+            f"bestmodel_{branch}_*.pkl",
+            f"final_{branch}_*.pkl",
+            f"*_{branch}_*.pkl",
+        )
         seen: set[Path] = set()
         for pat in patterns:
             for f in sorted(models_dir.glob(pat)):
@@ -169,31 +173,133 @@ def copy_test_result(
         print(f"         test log: {src_log} -> {out_log / src_log.name}")
 
 
+def _matches_branch(filename: str, branch: str) -> bool:
+    name = filename.lower()
+    br = branch.lower()
+    return br in name or name.startswith(f"test_{br}")
+
+
+def _collect_outputs(
+    out_log: Path,
+    out_models: Path,
+    out_test: Path,
+    branch: str | None = None,
+    branches: list[str] | None = None,
+) -> list[tuple[Path, str]]:
+    """Return (file_path, arcname) pairs; optional filter by GO branch name in filename."""
+    only = branches if branches is not None else ([branch] if branch else None)
+    pairs: list[tuple[Path, str]] = []
+    for folder, arc_prefix in (
+        (out_log, "log"),
+        (out_models, "save_models"),
+        (out_test, "test_result"),
+    ):
+        if not folder.is_dir():
+            continue
+        for f in sorted(folder.rglob("*")):
+            if not f.is_file():
+                continue
+            if only is not None:
+                if f.name == "_kaggle_manifest.txt":
+                    pass
+                elif not any(_matches_branch(f.name, br) for br in only):
+                    continue
+            pairs.append((f, f"{arc_prefix}/{f.relative_to(folder).as_posix()}"))
+    return pairs
+
+
+def write_manifest(
+    branches: list[str],
+    out_log: Path,
+    out_models: Path,
+    out_test: Path,
+    manifest_path: Path,
+) -> None:
+    lines = ["# CAFA6 Kaggle output manifest", f"branches_saved: {', '.join(branches)}", ""]
+    for folder, label in (
+        (out_log, "log"),
+        (out_models, "save_models"),
+        (out_test, "test_result"),
+    ):
+        if not folder.is_dir():
+            continue
+        lines.append(f"## {label}/")
+        for f in sorted(folder.iterdir()):
+            if f.is_file():
+                lines.append(f"  {f.name}  ({f.stat().st_size} B)")
+        lines.append("")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[manifest] {manifest_path}")
+
+
 def make_zip(
     out_log: Path,
     out_models: Path,
     out_test: Path,
     zip_path: Path,
     data_dir: Path | None = None,
+    branch: str | None = None,
 ) -> None:
     """Pack log/, save_models/, test_result/ into one zip for Kaggle download."""
     zip_path.parent.mkdir(parents=True, exist_ok=True)
+    only = [branch] if branch else None
+    pairs = _collect_outputs(out_log, out_models, out_test, branches=only)
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for folder, arc_prefix in (
-            (out_log, "log"),
-            (out_models, "save_models"),
-            (out_test, "test_result"),
-        ):
-            if not folder.is_dir():
-                continue
-            for f in sorted(folder.rglob("*")):
-                if f.is_file():
-                    zf.write(f, arcname=f"{arc_prefix}/{f.relative_to(folder).as_posix()}")
-        if data_dir is not None:
-            manifest = data_dir / "log" / "_kaggle_manifest.txt"
+        for f, arcname in pairs:
+            zf.write(f, arcname=arcname)
+        if data_dir is not None and branch is None and only is None:
+            manifest = out_log / "_kaggle_manifest.txt"
+            if not manifest.is_file():
+                manifest = data_dir / "log" / "_kaggle_manifest.txt"
             if manifest.is_file():
                 zf.write(manifest, arcname="log/_kaggle_manifest.txt")
-    print(f"[zip] wrote {zip_path} ({zip_path.stat().st_size / 1e6:.1f} MB)")
+    mb = zip_path.stat().st_size / 1e6
+    tag = f"[{branch}] " if branch else ""
+    print(f"[zip] {tag}wrote {zip_path} ({mb:.1f} MB, {len(pairs)} files)")
+
+
+def make_split_zips(
+    out_log: Path,
+    out_models: Path,
+    out_test: Path,
+    zip_base: Path,
+    max_mb: float,
+    branches: list[str] | None = None,
+) -> list[Path]:
+    """Split all outputs into zip_base_part1.zip, part2.zip, … each ≤ max_mb (approx)."""
+    max_bytes = int(max_mb * 1e6)
+    pairs = _collect_outputs(out_log, out_models, out_test, branches=branches)
+    if not pairs:
+        return []
+    parts: list[Path] = []
+    part_idx = 1
+    current: list[tuple[Path, str]] = []
+    current_size = 0
+
+    def flush() -> None:
+        nonlocal part_idx, current, current_size
+        if not current:
+            return
+        part_path = zip_base.parent / f"{zip_base.stem}_part{part_idx}{zip_base.suffix}"
+        with zipfile.ZipFile(part_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for f, arcname in current:
+                zf.write(f, arcname=arcname)
+        mb = part_path.stat().st_size / 1e6
+        print(f"[zip] split wrote {part_path} ({mb:.1f} MB, {len(current)} files)")
+        parts.append(part_path)
+        part_idx += 1
+        current = []
+        current_size = 0
+
+    for f, arcname in pairs:
+        sz = f.stat().st_size
+        if current and current_size + sz > max_bytes:
+            flush()
+        current.append((f, arcname))
+        current_size += sz
+    flush()
+    return parts
 
 
 def main() -> None:
@@ -224,6 +330,18 @@ def main() -> None:
         default="cafa6_output.zip",
         help="Tên file zip (trong /kaggle/working/)",
     )
+    parser.add_argument(
+        "--per-branch-zip",
+        action="store_true",
+        help="Thêm cafa6_{cc,mf,bp}.zip — mỗi nhánh riêng, dễ tải từng phần",
+    )
+    parser.add_argument(
+        "--split-mb",
+        type=float,
+        default=0,
+        metavar="N",
+        help="Chia zip đầy đủ thành cafa6_output_part1.zip, part2.zip, … mỗi phần ≤ N MB",
+    )
     args = parser.parse_args()
 
     import os
@@ -244,9 +362,38 @@ def main() -> None:
         copy_branch(branch, data_dir, out_log, out_models)
         copy_test_result(branch, data_dir, out_test, out_log)
 
+    write_manifest(args.branches, out_log, out_models, out_test, out_log / "_kaggle_manifest.txt")
+
     if args.zip:
         zip_path = Path("/kaggle/working") / args.zip_name
-        make_zip(out_log, out_models, out_test, zip_path, data_dir)
+        pairs = _collect_outputs(out_log, out_models, out_test, branches=args.branches)
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for f, arcname in pairs:
+                zf.write(f, arcname=arcname)
+            manifest = out_log / "_kaggle_manifest.txt"
+            if manifest.is_file():
+                zf.write(manifest, arcname="log/_kaggle_manifest.txt")
+        print(
+            f"[zip] wrote {zip_path} ({zip_path.stat().st_size / 1e6:.1f} MB, "
+            f"{len(pairs)} files, branches={','.join(args.branches)})"
+        )
+
+    if args.per_branch_zip:
+        for branch in args.branches:
+            branch_zip = Path("/kaggle/working") / f"cafa6_{branch}.zip"
+            make_zip(out_log, out_models, out_test, branch_zip, data_dir, branch=branch)
+
+    if args.split_mb and args.split_mb > 0:
+        zip_base = Path("/kaggle/working") / Path(args.zip_name).stem
+        make_split_zips(
+            out_log,
+            out_models,
+            out_test,
+            zip_base.with_suffix(".zip"),
+            args.split_mb,
+            branches=args.branches,
+        )
 
     print("\n=== Output ===")
     if out_log.is_dir():
